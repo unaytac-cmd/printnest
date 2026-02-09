@@ -45,7 +45,7 @@ interface ApiConfig {
 
   // Shipping
   nestshipperApiKey: string;
-  easypostApiKey: string;
+  nestshipperClientId: string;
 
   // AWS S3 Storage
   awsAccessKeyId: string;
@@ -94,7 +94,7 @@ export default function Onboarding() {
 
     // Shipping
     nestshipperApiKey: '',
-    easypostApiKey: '',
+    nestshipperClientId: '',
 
     // AWS S3 Storage
     awsAccessKeyId: '',
@@ -185,8 +185,8 @@ export default function Onboarding() {
       case 'payment':
         return !!(apiConfig.stripeSecretKey.trim() && apiConfig.stripePublishableKey.trim());
       case 'shipping':
-        // At least one shipping provider required
-        return !!(apiConfig.nestshipperApiKey.trim() || apiConfig.easypostApiKey.trim());
+        // NestShipper requires both API Key and Client ID
+        return !!(apiConfig.nestshipperApiKey.trim() && apiConfig.nestshipperClientId.trim());
       case 'storage':
         return !!(
           apiConfig.awsAccessKeyId.trim() &&
@@ -230,7 +230,7 @@ export default function Onboarding() {
       },
       shippingSettings: {
         nestshipperApiKey: apiConfig.nestshipperApiKey || null,
-        easypostApiKey: apiConfig.easypostApiKey || null,
+        nestshipperClientId: apiConfig.nestshipperClientId || null,
       },
       awsSettings: {
         accessKeyId: apiConfig.awsAccessKeyId,
@@ -280,7 +280,7 @@ export default function Onboarding() {
           stripeWebhookSecret: apiConfig.stripeWebhookSecret || null,
           // Shipping
           nestshipperApiKey: apiConfig.nestshipperApiKey || null,
-          easypostApiKey: apiConfig.easypostApiKey || null,
+          nestshipperClientId: apiConfig.nestshipperClientId || null,
           // AWS S3
           awsAccessKeyId: apiConfig.awsAccessKeyId,
           awsSecretAccessKey: apiConfig.awsSecretAccessKey,
@@ -623,24 +623,61 @@ export default function Onboarding() {
           <div className="py-4">
             <h2 className="text-xl font-bold mb-2">Shipping Labels</h2>
             <p className="text-muted-foreground mb-6">
-              Configure shipping providers for label generation.
+              Configure NestShipper for shipping label generation.
             </p>
 
-            <div className="space-y-6">
-              {/* NestShipper */}
-              <div className="border border-border rounded-lg p-4">
-                <h3 className="font-medium mb-3 flex items-center gap-2">
-                  <Truck className="w-4 h-4 text-primary" />
-                  NestShipper <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Recommended</span>
-                </h3>
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
+              <p className="text-sm text-blue-800 dark:text-blue-200">
+                Get your NestShipper credentials:{' '}
+                <a
+                  href="https://nestshipper.com/dashboard/settings"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline inline-flex items-center gap-1"
+                >
+                  NestShipper Dashboard → Settings <ExternalLink className="w-3 h-3" />
+                </a>
+              </p>
+            </div>
+
+            <div className="border border-border rounded-lg p-4">
+              <h3 className="font-medium mb-4 flex items-center gap-2">
+                <Truck className="w-4 h-4 text-primary" />
+                NestShipper
+              </h3>
+              <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium mb-1">API Key</label>
+                  <label className="block text-sm font-medium mb-1">
+                    Client ID <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showSecrets['nestshipperClientId'] ? 'text' : 'password'}
+                      value={apiConfig.nestshipperClientId}
+                      onChange={(e) => setApiConfig({ ...apiConfig, nestshipperClientId: e.target.value })}
+                      placeholder="Enter your NestShipper Client ID"
+                      className="w-full px-4 py-2 pr-10 border border-border rounded-lg bg-background"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => toggleSecret('nestshipperClientId')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    >
+                      {showSecrets['nestshipperClientId'] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    API Key <span className="text-red-500">*</span>
+                  </label>
                   <div className="relative">
                     <input
                       type={showSecrets['nestshipperApiKey'] ? 'text' : 'password'}
                       value={apiConfig.nestshipperApiKey}
                       onChange={(e) => setApiConfig({ ...apiConfig, nestshipperApiKey: e.target.value })}
-                      placeholder="ns_..."
+                      placeholder="Enter your NestShipper API Key"
                       className="w-full px-4 py-2 pr-10 border border-border rounded-lg bg-background"
                     />
                     <button
@@ -653,33 +690,15 @@ export default function Onboarding() {
                   </div>
                 </div>
               </div>
+            </div>
 
-              {/* EasyPost */}
-              <div className="border border-border rounded-lg p-4">
-                <h3 className="font-medium mb-3 flex items-center gap-2">
-                  <Truck className="w-4 h-4 text-primary" />
-                  EasyPost <span className="text-xs text-muted-foreground">(Alternative)</span>
-                </h3>
-                <div>
-                  <label className="block text-sm font-medium mb-1">API Key</label>
-                  <div className="relative">
-                    <input
-                      type={showSecrets['easypostApiKey'] ? 'text' : 'password'}
-                      value={apiConfig.easypostApiKey}
-                      onChange={(e) => setApiConfig({ ...apiConfig, easypostApiKey: e.target.value })}
-                      placeholder="EZAK..."
-                      className="w-full px-4 py-2 pr-10 border border-border rounded-lg bg-background"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => toggleSecret('easypostApiKey')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                    >
-                      {showSecrets['easypostApiKey'] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-              </div>
+            <div className="mt-6 p-4 bg-muted/50 rounded-lg">
+              <h4 className="font-medium text-sm mb-2">NestShipper provides:</h4>
+              <ul className="text-sm text-muted-foreground space-y-1">
+                <li>• Discounted USPS, UPS, and FedEx rates</li>
+                <li>• Automatic label generation</li>
+                <li>• Real-time tracking updates</li>
+              </ul>
             </div>
           </div>
         );

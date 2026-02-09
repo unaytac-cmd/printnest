@@ -106,6 +106,7 @@ class SettingsRepository : KoinComponent {
                 "aws_region" -> settings.aws?.region
                 "aws_s3_bucket" -> settings.aws?.s3Bucket
                 "nestshipper_api_key" -> settings.shipping?.nestshipperApiKey
+                "nestshipper_client_id" -> settings.shipping?.nestshipperClientId
                 "easypost_api_key" -> settings.shipping?.easypostApiKey
                 else -> null
             }

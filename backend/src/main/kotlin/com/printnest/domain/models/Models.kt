@@ -133,6 +133,7 @@ data class GangsheetSettings(
 @Serializable
 data class ShippingSettings(
     val nestshipperApiKey: String? = null,
+    val nestshipperClientId: String? = null,
     val easypostApiKey: String? = null
 )
 
