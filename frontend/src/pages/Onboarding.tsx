@@ -119,19 +119,27 @@ export default function Onboarding() {
 
   useEffect(() => {
     // Check if user is authenticated (came from Register)
-    if (isAuthenticated && user && tenant) {
+    if (isAuthenticated && user) {
       setOnboardingData({
         fullName: `${user.firstName} ${user.lastName}`.trim(),
         email: user.email,
       });
-      // Pre-fill from tenant
-      setApiConfig(prev => ({
-        ...prev,
-        businessName: tenant.name || `${user.firstName}'s Store`,
-        subdomain: tenant.slug || '',
-      }));
-    } else {
-      // Check localStorage (came from LandingPage)
+      // Pre-fill from tenant if available
+      if (tenant) {
+        setApiConfig(prev => ({
+          ...prev,
+          businessName: tenant.name || `${user.firstName}'s Store`,
+          subdomain: tenant.slug || '',
+        }));
+      } else {
+        // Tenant not loaded yet, use user info for defaults
+        setApiConfig(prev => ({
+          ...prev,
+          businessName: `${user.firstName}'s Store`,
+        }));
+      }
+    } else if (!isAuthenticated) {
+      // Not authenticated - check localStorage (came from LandingPage)
       const data = localStorage.getItem('pendingOnboarding');
       if (data) {
         const parsed = JSON.parse(data);
@@ -146,6 +154,7 @@ export default function Onboarding() {
         navigate('/register');
       }
     }
+    // Note: If isAuthenticated but no user yet, wait for user to load
   }, [navigate, isAuthenticated, user, tenant]);
 
   const toggleSecret = (key: string) => {

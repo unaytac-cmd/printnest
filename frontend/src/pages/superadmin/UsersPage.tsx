@@ -31,70 +31,15 @@ interface User {
   createdAt: string;
 }
 
-const mockUsers: User[] = [
-  {
-    id: '1',
-    email: 'john@acme.com',
-    firstName: 'John',
-    lastName: 'Smith',
-    role: 'owner',
-    tenant: { name: 'Acme Print Co', slug: 'acme' },
-    status: 'active',
-    lastLogin: '2024-03-15T10:30:00Z',
-    createdAt: '2024-01-15T08:00:00Z',
-  },
-  {
-    id: '2',
-    email: 'jane@bestpod.com',
-    firstName: 'Jane',
-    lastName: 'Doe',
-    role: 'owner',
-    tenant: { name: 'Best POD Shop', slug: 'bestpod' },
-    status: 'active',
-    lastLogin: '2024-03-14T15:45:00Z',
-    createdAt: '2024-02-20T09:00:00Z',
-  },
-  {
-    id: '3',
-    email: 'mike@acme.com',
-    firstName: 'Mike',
-    lastName: 'Johnson',
-    role: 'admin',
-    tenant: { name: 'Acme Print Co', slug: 'acme' },
-    status: 'active',
-    lastLogin: '2024-03-15T08:00:00Z',
-    createdAt: '2024-02-01T10:00:00Z',
-  },
-  {
-    id: '4',
-    email: 'sarah@cooltees.com',
-    firstName: 'Sarah',
-    lastName: 'Williams',
-    role: 'owner',
-    tenant: { name: 'Cool Tees', slug: 'cooltees' },
-    status: 'pending',
-    lastLogin: null,
-    createdAt: '2024-03-01T12:00:00Z',
-  },
-  {
-    id: '5',
-    email: 'bob@printmaster.com',
-    firstName: 'Bob',
-    lastName: 'Brown',
-    role: 'employee',
-    tenant: { name: 'PrintMaster Pro', slug: 'printmaster' },
-    status: 'inactive',
-    lastLogin: '2024-02-28T09:00:00Z',
-    createdAt: '2024-01-28T11:00:00Z',
-  },
-];
+// TODO: Replace with API call when backend endpoint is ready
+const users: User[] = [];
 
 export default function UsersPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  const filteredUsers = mockUsers.filter((user) => {
+  const filteredUsers = users.filter((user) => {
     const matchesSearch =
       user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
       `${user.firstName} ${user.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -171,7 +116,7 @@ export default function UsersPage() {
               <Users className="w-5 h-5 text-blue-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold">{mockUsers.length}</p>
+              <p className="text-2xl font-bold">{users.length}</p>
               <p className="text-sm text-muted-foreground">Total Users</p>
             </div>
           </div>
@@ -182,7 +127,7 @@ export default function UsersPage() {
               <CheckCircle className="w-5 h-5 text-green-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold">{mockUsers.filter(u => u.status === 'active').length}</p>
+              <p className="text-2xl font-bold">{users.filter(u => u.status === 'active').length}</p>
               <p className="text-sm text-muted-foreground">Active</p>
             </div>
           </div>
@@ -193,7 +138,7 @@ export default function UsersPage() {
               <Shield className="w-5 h-5 text-purple-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold">{mockUsers.filter(u => u.role === 'owner').length}</p>
+              <p className="text-2xl font-bold">{users.filter(u => u.role === 'owner').length}</p>
               <p className="text-sm text-muted-foreground">Owners</p>
             </div>
           </div>
@@ -204,7 +149,7 @@ export default function UsersPage() {
               <Clock className="w-5 h-5 text-yellow-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold">{mockUsers.filter(u => u.status === 'pending').length}</p>
+              <p className="text-2xl font-bold">{users.filter(u => u.status === 'pending').length}</p>
               <p className="text-sm text-muted-foreground">Pending</p>
             </div>
           </div>

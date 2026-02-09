@@ -16,59 +16,6 @@ interface FulfillmentOrder {
   trackingNumber?: string;
 }
 
-const mockFulfillmentOrders: FulfillmentOrder[] = [
-  {
-    id: '1',
-    orderNumber: 'ORD-2024-001',
-    status: 'delivered',
-    items: [{ name: 'Custom T-Shirt', quantity: 2 }],
-    customer: 'John Doe',
-    destination: 'New York, NY',
-    estimatedDelivery: '2024-01-18',
-    trackingNumber: '1Z999AA10123456784',
-  },
-  {
-    id: '2',
-    orderNumber: 'ORD-2024-002',
-    status: 'shipping',
-    items: [{ name: 'Premium Hoodie', quantity: 1 }],
-    customer: 'Jane Smith',
-    destination: 'Los Angeles, CA',
-    estimatedDelivery: '2024-01-20',
-    trackingNumber: '1Z999AA10123456785',
-  },
-  {
-    id: '3',
-    orderNumber: 'ORD-2024-003',
-    status: 'quality_check',
-    items: [
-      { name: 'Ceramic Mug', quantity: 3 },
-      { name: 'Canvas Poster', quantity: 1 },
-    ],
-    customer: 'Mike Johnson',
-    destination: 'Chicago, IL',
-    estimatedDelivery: '2024-01-22',
-  },
-  {
-    id: '4',
-    orderNumber: 'ORD-2024-004',
-    status: 'printing',
-    items: [{ name: 'Phone Case', quantity: 1 }],
-    customer: 'Sarah Williams',
-    destination: 'Miami, FL',
-    estimatedDelivery: '2024-01-23',
-  },
-  {
-    id: '5',
-    orderNumber: 'ORD-2024-005',
-    status: 'pending',
-    items: [{ name: 'Dad Hat', quantity: 2 }],
-    customer: 'Chris Brown',
-    destination: 'Seattle, WA',
-    estimatedDelivery: '2024-01-25',
-  },
-];
-
 const statusConfig = {
   pending: {
     label: 'Pending',
@@ -100,17 +47,20 @@ const statusConfig = {
 export default function Fulfillment() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  const filteredOrders = mockFulfillmentOrders.filter(
+  // TODO: Replace with API call when backend endpoint is ready
+  const orders: FulfillmentOrder[] = [];
+
+  const filteredOrders = orders.filter(
     (order) => statusFilter === 'all' || order.status === statusFilter
   );
 
   const statusCounts = {
-    all: mockFulfillmentOrders.length,
-    pending: mockFulfillmentOrders.filter((o) => o.status === 'pending').length,
-    printing: mockFulfillmentOrders.filter((o) => o.status === 'printing').length,
-    quality_check: mockFulfillmentOrders.filter((o) => o.status === 'quality_check').length,
-    shipping: mockFulfillmentOrders.filter((o) => o.status === 'shipping').length,
-    delivered: mockFulfillmentOrders.filter((o) => o.status === 'delivered').length,
+    all: orders.length,
+    pending: orders.filter((o) => o.status === 'pending').length,
+    printing: orders.filter((o) => o.status === 'printing').length,
+    quality_check: orders.filter((o) => o.status === 'quality_check').length,
+    shipping: orders.filter((o) => o.status === 'shipping').length,
+    delivered: orders.filter((o) => o.status === 'delivered').length,
   };
 
   return (
@@ -174,113 +124,122 @@ export default function Fulfillment() {
         </button>
       </div>
 
-      {/* Orders List */}
-      <div className="space-y-4">
-        {filteredOrders.map((order) => {
-          const config = statusConfig[order.status];
-          const StatusIcon = config.icon;
+      {/* Orders List or Empty State */}
+      {filteredOrders.length > 0 ? (
+        <div className="space-y-4">
+          {filteredOrders.map((order) => {
+            const config = statusConfig[order.status];
+            const StatusIcon = config.icon;
 
-          return (
-            <div
-              key={order.id}
-              className="bg-card border border-border rounded-xl p-4 hover:shadow-md transition-shadow"
-            >
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                {/* Order Info */}
-                <div className="flex items-start gap-4">
-                  <div
-                    className={cn(
-                      'w-12 h-12 rounded-lg flex items-center justify-center',
-                      config.color
-                    )}
-                  >
-                    <StatusIcon className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <p className="font-semibold">{order.orderNumber}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {order.customer}
-                    </p>
-                    <div className="flex items-center gap-1 mt-1 text-sm text-muted-foreground">
-                      <MapPin className="w-3 h-3" />
-                      {order.destination}
+            return (
+              <div
+                key={order.id}
+                className="bg-card border border-border rounded-xl p-4 hover:shadow-md transition-shadow"
+              >
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  {/* Order Info */}
+                  <div className="flex items-start gap-4">
+                    <div
+                      className={cn(
+                        'w-12 h-12 rounded-lg flex items-center justify-center',
+                        config.color
+                      )}
+                    >
+                      <StatusIcon className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="font-semibold">{order.orderNumber}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {order.customer}
+                      </p>
+                      <div className="flex items-center gap-1 mt-1 text-sm text-muted-foreground">
+                        <MapPin className="w-3 h-3" />
+                        {order.destination}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Items */}
-                <div className="flex-1 lg:text-center">
-                  {order.items.map((item, i) => (
-                    <p key={i} className="text-sm">
-                      {item.quantity}x {item.name}
-                    </p>
-                  ))}
-                </div>
+                  {/* Items */}
+                  <div className="flex-1 lg:text-center">
+                    {order.items.map((item, i) => (
+                      <p key={i} className="text-sm">
+                        {item.quantity}x {item.name}
+                      </p>
+                    ))}
+                  </div>
 
-                {/* Status & Tracking */}
-                <div className="lg:text-right">
-                  <span
-                    className={cn(
-                      'inline-block px-3 py-1 text-sm rounded-full',
-                      config.color
+                  {/* Status & Tracking */}
+                  <div className="lg:text-right">
+                    <span
+                      className={cn(
+                        'inline-block px-3 py-1 text-sm rounded-full',
+                        config.color
+                      )}
+                    >
+                      {config.label}
+                    </span>
+                    {order.trackingNumber && (
+                      <p className="text-sm text-muted-foreground mt-2">
+                        Tracking: {order.trackingNumber}
+                      </p>
                     )}
-                  >
-                    {config.label}
-                  </span>
-                  {order.trackingNumber && (
-                    <p className="text-sm text-muted-foreground mt-2">
-                      Tracking: {order.trackingNumber}
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Est. Delivery: {order.estimatedDelivery}
                     </p>
-                  )}
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Est. Delivery: {order.estimatedDelivery}
-                  </p>
+                  </div>
                 </div>
-              </div>
 
-              {/* Progress Bar */}
-              <div className="mt-4 pt-4 border-t border-border">
-                <div className="flex items-center gap-2">
-                  {Object.entries(statusConfig).map(([key]) => {
-                    const statusOrder = ['pending', 'printing', 'quality_check', 'shipping', 'delivered'];
-                    const currentIndex = statusOrder.indexOf(order.status);
-                    const stepIndex = statusOrder.indexOf(key);
-                    const isCompleted = stepIndex <= currentIndex;
+                {/* Progress Bar */}
+                <div className="mt-4 pt-4 border-t border-border">
+                  <div className="flex items-center gap-2">
+                    {Object.entries(statusConfig).map(([key]) => {
+                      const statusOrder = ['pending', 'printing', 'quality_check', 'shipping', 'delivered'];
+                      const currentIndex = statusOrder.indexOf(order.status);
+                      const stepIndex = statusOrder.indexOf(key);
+                      const isCompleted = stepIndex <= currentIndex;
 
-                    return (
-                      <div key={key} className="flex-1 flex items-center">
-                        <div
-                          className={cn(
-                            'w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium',
-                            isCompleted
-                              ? 'bg-primary text-primary-foreground'
-                              : 'bg-muted text-muted-foreground'
-                          )}
-                        >
-                          {stepIndex + 1}
-                        </div>
-                        {stepIndex < 4 && (
+                      return (
+                        <div key={key} className="flex-1 flex items-center">
                           <div
                             className={cn(
-                              'flex-1 h-1 mx-2',
-                              stepIndex < currentIndex ? 'bg-primary' : 'bg-muted'
+                              'w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium',
+                              isCompleted
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-muted text-muted-foreground'
                             )}
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
+                          >
+                            {stepIndex + 1}
+                          </div>
+                          {stepIndex < 4 && (
+                            <div
+                              className={cn(
+                                'flex-1 h-1 mx-2',
+                                stepIndex < currentIndex ? 'bg-primary' : 'bg-muted'
+                              )}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {filteredOrders.length === 0 && (
-        <div className="text-center py-12">
-          <Package className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-          <p className="text-muted-foreground">No orders found</p>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="text-center py-12 bg-card border border-border rounded-xl">
+          <Package className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
+          <h3 className="text-lg font-semibold mb-2">No orders in fulfillment</h3>
+          <p className="text-muted-foreground mb-6">
+            Orders will appear here once synced from ShipStation.
+          </p>
+          <a
+            href="/settings/integrations"
+            className="inline-block px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            Connect ShipStation
+          </a>
         </div>
       )}
     </div>

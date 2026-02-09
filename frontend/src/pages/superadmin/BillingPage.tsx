@@ -37,105 +37,23 @@ interface Subscription {
   startDate: string;
 }
 
-const mockTransactions: Transaction[] = [
-  {
-    id: 'txn_1',
-    tenantName: 'Acme Print Co',
-    tenantSlug: 'acme',
-    type: 'subscription',
-    amount: 199,
-    status: 'completed',
-    description: 'Enterprise plan - Monthly',
-    date: '2024-03-15T10:30:00Z',
-  },
-  {
-    id: 'txn_2',
-    tenantName: 'Best POD Shop',
-    tenantSlug: 'bestpod',
-    type: 'subscription',
-    amount: 79,
-    status: 'completed',
-    description: 'Professional plan - Monthly',
-    date: '2024-03-14T15:45:00Z',
-  },
-  {
-    id: 'txn_3',
-    tenantName: 'Cool Tees',
-    tenantSlug: 'cooltees',
-    type: 'subscription',
-    amount: 29,
-    status: 'pending',
-    description: 'Starter plan - Monthly',
-    date: '2024-03-14T09:00:00Z',
-  },
-  {
-    id: 'txn_4',
-    tenantName: 'PrintMaster Pro',
-    tenantSlug: 'printmaster',
-    type: 'overage',
-    amount: 45,
-    status: 'completed',
-    description: 'Order overage - 450 extra orders',
-    date: '2024-03-13T11:00:00Z',
-  },
-  {
-    id: 'txn_5',
-    tenantName: 'Design Hub',
-    tenantSlug: 'designhub',
-    type: 'refund',
-    amount: -50,
-    status: 'completed',
-    description: 'Partial refund - Service credit',
-    date: '2024-03-12T14:30:00Z',
-  },
-];
-
-const mockSubscriptions: Subscription[] = [
-  {
-    id: 'sub_1',
-    tenantName: 'Acme Print Co',
-    tenantSlug: 'acme',
-    plan: 'enterprise',
-    amount: 199,
-    status: 'active',
-    nextBilling: '2024-04-15',
-    startDate: '2024-01-15',
-  },
-  {
-    id: 'sub_2',
-    tenantName: 'Best POD Shop',
-    tenantSlug: 'bestpod',
-    plan: 'professional',
-    amount: 79,
-    status: 'active',
-    nextBilling: '2024-04-14',
-    startDate: '2024-02-14',
-  },
-  {
-    id: 'sub_3',
-    tenantName: 'PrintMaster Pro',
-    tenantSlug: 'printmaster',
-    plan: 'professional',
-    amount: 79,
-    status: 'past_due',
-    nextBilling: '2024-03-10',
-    startDate: '2024-01-10',
-  },
-];
+// TODO: Replace with API call when backend endpoint is ready
+const transactions: Transaction[] = [];
+const subscriptions: Subscription[] = [];
 
 export default function BillingPage() {
   const [activeTab, setActiveTab] = useState<'transactions' | 'subscriptions'>('transactions');
   const [dateRange, setDateRange] = useState('30d');
 
-  const totalRevenue = mockTransactions
+  const totalRevenue = transactions
     .filter(t => t.status === 'completed' && t.amount > 0)
     .reduce((sum, t) => sum + t.amount, 0);
 
-  const pendingAmount = mockTransactions
+  const pendingAmount = transactions
     .filter(t => t.status === 'pending')
     .reduce((sum, t) => sum + t.amount, 0);
 
-  const refundAmount = mockTransactions
+  const refundAmount = transactions
     .filter(t => t.type === 'refund')
     .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
@@ -352,7 +270,7 @@ export default function BillingPage() {
               </tr>
             </thead>
             <tbody>
-              {mockTransactions.map((txn) => (
+              {transactions.map((txn) => (
                 <tr key={txn.id} className="border-b border-border hover:bg-muted/50 transition-colors">
                   <td className="py-4 px-4">
                     <div className="flex items-center gap-2">
@@ -405,7 +323,7 @@ export default function BillingPage() {
               </tr>
             </thead>
             <tbody>
-              {mockSubscriptions.map((sub) => (
+              {subscriptions.map((sub) => (
                 <tr key={sub.id} className="border-b border-border hover:bg-muted/50 transition-colors">
                   <td className="py-4 px-4">
                     <div className="flex items-center gap-2">
