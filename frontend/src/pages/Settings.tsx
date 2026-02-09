@@ -1,7 +1,8 @@
 import { Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import { Store, CreditCard, Bell, User, Shield, Palette, Truck, Users, RefreshCw, CheckCircle, XCircle, Eye, EyeOff, Plus, Settings2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import apiClient from '@/api/client';
 
 const settingsNav = [
   { title: 'Store', href: '/settings/store', icon: Store },
@@ -54,8 +55,50 @@ function SettingsLayout({ children }: { children: React.ReactNode }) {
 }
 
 function StoreSettings() {
-  // TODO: Fetch from API and use tenant store
-  // const { tenant } = useTenantStore();
+  const [storeName, setStoreName] = useState('');
+  const [subdomain, setSubdomain] = useState('');
+  const [customDomain, setCustomDomain] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const response = await apiClient.get('/settings');
+        const settings = response.data;
+        setStoreName(settings.name || '');
+        setSubdomain(settings.subdomain || '');
+        setCustomDomain(settings.customDomain || '');
+      } catch (err) {
+        console.error('Failed to fetch settings:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchSettings();
+  }, []);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await apiClient.put('/settings', {
+        name: storeName,
+        customDomain: customDomain || null,
+      });
+    } catch (err) {
+      console.error('Failed to save settings:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="bg-card border border-border rounded-xl p-6 flex items-center justify-center h-64">
+        <RefreshCw className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="bg-card border border-border rounded-xl p-6 space-y-6">
@@ -66,6 +109,8 @@ function StoreSettings() {
           <label className="block text-sm font-medium mb-1">Store Name</label>
           <input
             type="text"
+            value={storeName}
+            onChange={(e) => setStoreName(e.target.value)}
             placeholder="Enter your store name"
             className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
           />
@@ -77,19 +122,23 @@ function StoreSettings() {
             <span className="text-muted-foreground">https://</span>
             <input
               type="text"
-              placeholder="your-store"
-              className="flex-1 px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+              value={subdomain}
+              disabled
+              className="flex-1 px-3 py-2 border border-border rounded-lg bg-muted text-muted-foreground"
             />
             <span className="text-muted-foreground">.printnest.com</span>
           </div>
+          <p className="text-xs text-muted-foreground mt-1">Subdomain cannot be changed after registration</p>
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-1">Description</label>
-          <textarea
-            rows={3}
-            placeholder="Describe your store..."
-            className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+          <label className="block text-sm font-medium mb-1">Custom Domain (optional)</label>
+          <input
+            type="text"
+            value={customDomain}
+            onChange={(e) => setCustomDomain(e.target.value)}
+            placeholder="store.yourdomain.com"
+            className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
 
@@ -115,8 +164,12 @@ function StoreSettings() {
       </div>
 
       <div className="pt-4 border-t border-border">
-        <button className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors">
-          Save Changes
+        <button
+          onClick={handleSave}
+          disabled={isSaving}
+          className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+        >
+          {isSaving ? 'Saving...' : 'Save Changes'}
         </button>
       </div>
     </div>
@@ -234,6 +287,27 @@ function ShipStationSettings() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [stores, setStores] = useState<ShipStationStore[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Fetch saved settings on mount
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const response = await apiClient.get('/settings');
+        const settings = response.data;
+        if (settings.shipstationSettings) {
+          setApiKey(settings.shipstationSettings.apiKey || '');
+          setApiSecret(settings.shipstationSettings.apiSecret || '');
+          setIsConnected(settings.shipstationSettings.isConnected || (settings.shipstationSettings.apiKey && settings.shipstationSettings.apiSecret));
+        }
+      } catch (err) {
+        console.error('Failed to fetch settings:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchSettings();
+  }, []);
 
   const handleConnect = async () => {
     if (!apiKey || !apiSecret) {
@@ -285,6 +359,14 @@ function ShipStationSettings() {
       store.id === storeId ? { ...store, isActive: !store.isActive } : store
     ));
   };
+
+  if (isLoading) {
+    return (
+      <div className="bg-card border border-border rounded-xl p-6 flex items-center justify-center h-64">
+        <RefreshCw className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
