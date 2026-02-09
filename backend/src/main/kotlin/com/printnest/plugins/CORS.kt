@@ -20,6 +20,10 @@ fun Application.configureCORS() {
             allowHost("*.printnest.com", schemes = listOf("https"))
             allowHost("api.printnest.com", schemes = listOf("https"))
             allowHost("admin.printnest.com", schemes = listOf("https"))
+            // Allow IP-based access (before domain setup)
+            System.getenv("SERVER_IP")?.let { ip ->
+                allowHost(ip, schemes = listOf("http", "https"))
+            }
         } else {
             // Development only
             allowHost("localhost:3000", schemes = listOf("http"))
