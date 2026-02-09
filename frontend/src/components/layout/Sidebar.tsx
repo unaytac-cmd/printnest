@@ -63,12 +63,6 @@ function getNavigationGroups(role: UserRole | undefined): NavGroup[] {
     return [
       ...baseGroups,
       {
-        title: 'Customers',
-        items: [
-          { title: 'Customers', href: '/customers', icon: Users },
-        ],
-      },
-      {
         title: 'Print on Demand',
         items: [
           { title: 'Design Studio', href: '/design-studio', icon: Palette },
@@ -79,25 +73,9 @@ function getNavigationGroups(role: UserRole | undefined): NavGroup[] {
         ],
       },
       {
-        title: 'Catalog Management',
-        items: [
-          { title: 'Categories', href: '/categories', icon: FolderTree },
-          { title: 'Products', href: '/products', icon: Package },
-        ],
-      },
-      {
-        title: 'Management',
-        items: [
-          { title: 'Sub-dealers', href: '/settings/subdealers', icon: Users },
-          { title: 'Stores', href: '/settings/shipstation', icon: Store },
-        ],
-      },
-      {
         title: 'Settings',
         items: [
-          { title: 'Store Settings', href: '/settings/store', icon: Settings },
-          { title: 'Payments', href: '/settings/payments', icon: CreditCard },
-          { title: 'Notifications', href: '/settings/notifications', icon: Bell },
+          { title: 'Settings', href: '/settings', icon: Settings },
         ],
       },
     ];
@@ -121,19 +99,6 @@ function getNavigationGroups(role: UserRole | undefined): NavGroup[] {
   return [
     ...baseGroups,
     {
-      title: 'Catalog Management',
-      items: [
-        { title: 'Categories', href: '/categories', icon: FolderTree },
-        { title: 'Products', href: '/products', icon: Package },
-      ],
-    },
-    {
-      title: 'Customers',
-      items: [
-        { title: 'Customers', href: '/customers', icon: Users },
-      ],
-    },
-    {
       title: 'Print on Demand',
       items: [
         { title: 'Design Studio', href: '/design-studio', icon: Palette },
@@ -146,9 +111,7 @@ function getNavigationGroups(role: UserRole | undefined): NavGroup[] {
     {
       title: 'Settings',
       items: [
-        { title: 'Store Settings', href: '/settings/store', icon: Settings },
-        { title: 'Payments', href: '/settings/payments', icon: CreditCard },
-        { title: 'Notifications', href: '/settings/notifications', icon: Bell },
+        { title: 'Settings', href: '/settings', icon: Settings },
       ],
     },
   ];

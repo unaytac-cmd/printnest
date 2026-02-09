@@ -1,23 +1,65 @@
 import { Routes, Route, NavLink, Navigate } from 'react-router-dom';
-import { Store, CreditCard, Bell, User, Shield, Palette, Truck, Users, RefreshCw, CheckCircle, XCircle, Eye, EyeOff, Plus, Settings2, Cloud, Package } from 'lucide-react';
+import { Store, CreditCard, Bell, User, Shield, Palette, Truck, Users, RefreshCw, CheckCircle, XCircle, Eye, EyeOff, Plus, Settings2, Cloud, Package, ShoppingBag, FolderTree, UserCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import apiClient from '@/api/client';
 
+// Lazy load heavy components
+const ProductsPage = lazy(() => import('@/pages/Products'));
+const CustomersPage = lazy(() => import('@/pages/Customers'));
+const CategoriesPage = lazy(() => import('@/pages/Categories'));
+
 const settingsNav = [
-  { title: 'Store', href: '/settings/store', icon: Store },
-  { title: 'ShipStation', href: '/settings/shipstation', icon: Truck },
-  { title: 'Stripe', href: '/settings/stripe', icon: CreditCard },
-  { title: 'AWS', href: '/settings/aws', icon: Cloud },
-  { title: 'Shipping', href: '/settings/shipping', icon: Package },
-  { title: 'Sub-dealers', href: '/settings/subdealers', icon: Users },
-  { title: 'Notifications', href: '/settings/notifications', icon: Bell },
-  { title: 'Account', href: '/settings/account', icon: User },
-  { title: 'Security', href: '/settings/security', icon: Shield },
-  { title: 'Branding', href: '/settings/branding', icon: Palette },
+  // Store & Business
+  { title: 'Store', href: '/settings/store', icon: Store, section: 'business' },
+  { title: 'Products', href: '/settings/products', icon: ShoppingBag, section: 'business' },
+  { title: 'Categories', href: '/settings/categories', icon: FolderTree, section: 'business' },
+  { title: 'Customers', href: '/settings/customers', icon: UserCircle, section: 'business' },
+  { title: 'Sub-dealers', href: '/settings/subdealers', icon: Users, section: 'business' },
+
+  // Integrations
+  { title: 'ShipStation', href: '/settings/shipstation', icon: Truck, section: 'integrations' },
+  { title: 'Stripe', href: '/settings/stripe', icon: CreditCard, section: 'integrations' },
+  { title: 'AWS', href: '/settings/aws', icon: Cloud, section: 'integrations' },
+  { title: 'Shipping', href: '/settings/shipping', icon: Package, section: 'integrations' },
+
+  // Account & Security
+  { title: 'Notifications', href: '/settings/notifications', icon: Bell, section: 'account' },
+  { title: 'Account', href: '/settings/account', icon: User, section: 'account' },
+  { title: 'Security', href: '/settings/security', icon: Shield, section: 'account' },
+  { title: 'Branding', href: '/settings/branding', icon: Palette, section: 'account' },
 ];
 
 function SettingsLayout({ children }: { children: React.ReactNode }) {
+  const businessItems = settingsNav.filter(item => item.section === 'business');
+  const integrationItems = settingsNav.filter(item => item.section === 'integrations');
+  const accountItems = settingsNav.filter(item => item.section === 'account');
+
+  const renderNavSection = (title: string, items: typeof settingsNav) => (
+    <div className="space-y-1">
+      <p className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+        {title}
+      </p>
+      {items.map((item) => (
+        <NavLink
+          key={item.href}
+          to={item.href}
+          className={({ isActive }) =>
+            cn(
+              'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+              isActive
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-muted'
+            )
+          }
+        >
+          <item.icon className="w-5 h-5" />
+          {item.title}
+        </NavLink>
+      ))}
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <div>
@@ -28,24 +70,10 @@ function SettingsLayout({ children }: { children: React.ReactNode }) {
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Sidebar Navigation */}
         <nav className="lg:w-64 flex-shrink-0">
-          <div className="bg-card border border-border rounded-xl p-2">
-            {settingsNav.map((item) => (
-              <NavLink
-                key={item.href}
-                to={item.href}
-                className={({ isActive }) =>
-                  cn(
-                    'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                    isActive
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-muted'
-                  )
-                }
-              >
-                <item.icon className="w-5 h-5" />
-                {item.title}
-              </NavLink>
-            ))}
+          <div className="bg-card border border-border rounded-xl p-2 space-y-4">
+            {renderNavSection('Business', businessItems)}
+            {renderNavSection('Integrations', integrationItems)}
+            {renderNavSection('Account', accountItems)}
           </div>
         </nav>
 
@@ -1130,17 +1158,43 @@ function SubdealersSettings() {
   );
 }
 
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center h-64">
+      <RefreshCw className="w-6 h-6 animate-spin text-muted-foreground" />
+    </div>
+  );
+}
+
 export default function Settings() {
   return (
     <SettingsLayout>
       <Routes>
         <Route index element={<Navigate to="/settings/store" replace />} />
+        {/* Business */}
         <Route path="store" element={<StoreSettings />} />
+        <Route path="products/*" element={
+          <Suspense fallback={<PageLoader />}>
+            <ProductsPage />
+          </Suspense>
+        } />
+        <Route path="categories/*" element={
+          <Suspense fallback={<PageLoader />}>
+            <CategoriesPage />
+          </Suspense>
+        } />
+        <Route path="customers/*" element={
+          <Suspense fallback={<PageLoader />}>
+            <CustomersPage />
+          </Suspense>
+        } />
+        <Route path="subdealers" element={<SubdealersSettings />} />
+        {/* Integrations */}
         <Route path="shipstation" element={<ShipStationSettings />} />
         <Route path="stripe" element={<StripeSettings />} />
         <Route path="aws" element={<AwsSettings />} />
         <Route path="shipping" element={<ShippingSettingsPage />} />
-        <Route path="subdealers" element={<SubdealersSettings />} />
+        {/* Account */}
         <Route path="notifications" element={<NotificationsSettings />} />
         <Route path="account" element={<PlaceholderSettings title="Account" />} />
         <Route path="security" element={<PlaceholderSettings title="Security" />} />

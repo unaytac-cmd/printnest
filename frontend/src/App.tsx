@@ -202,10 +202,13 @@ function App() {
 
           {/* Main routes */}
           <Route path="dashboard" element={<Dashboard />} />
-          <Route path="products/*" element={<Products />} />
           <Route path="orders/*" element={<Orders />} />
-          <Route path="customers/*" element={<Customers />} />
           <Route path="analytics" element={<Analytics />} />
+
+          {/* Redirects to Settings */}
+          <Route path="products/*" element={<Navigate to="/settings/products" replace />} />
+          <Route path="customers/*" element={<Navigate to="/settings/customers" replace />} />
+          <Route path="categories" element={<Navigate to="/settings/categories" replace />} />
 
           {/* POD routes */}
           <Route path="design-studio" element={<DesignStudio />} />
@@ -215,7 +218,6 @@ function App() {
           {/* Production routes */}
           <Route path="gangsheet/*" element={<Gangsheet />} />
           <Route path="mapping" element={<Mapping />} />
-          <Route path="categories" element={<Categories />} />
 
           {/* Settings routes */}
           <Route path="settings/*" element={<Settings />} />
