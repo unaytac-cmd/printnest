@@ -5,6 +5,9 @@ import com.printnest.domain.repository.OrderRepository
 import com.printnest.domain.repository.ShipStationStoreRepository
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import org.slf4j.LoggerFactory
 import java.math.BigDecimal
 
@@ -178,13 +181,17 @@ class ShipStationService(
 
                         // Upsert order items
                         ssOrder.items.forEach { item ->
-                            val productDetailJson = json.encodeToString(mapOf(
-                                "sku" to item.sku,
-                                "name" to item.name,
-                                "options" to item.options?.map { opt -> "${opt.name}: ${opt.value}" },
-                                "weight" to item.weight?.value,
-                                "weightUnits" to item.weight?.units
-                            ))
+                            val productDetailJson = buildJsonObject {
+                                put("sku", item.sku)
+                                put("name", item.name)
+                                item.options?.let { opts ->
+                                    putJsonArray("options") {
+                                        opts.forEach { opt -> add("${opt.name}: ${opt.value}") }
+                                    }
+                                }
+                                item.weight?.value?.let { put("weight", it) }
+                                item.weight?.units?.let { put("weightUnits", it) }
+                            }.toString()
 
                             orderRepository.upsertShipStationOrderProduct(
                                 tenantId = tenantId,

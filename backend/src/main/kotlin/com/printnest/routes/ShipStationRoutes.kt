@@ -244,20 +244,25 @@ fun Route.shipStationRoutes() {
 
             result.fold(
                 onSuccess = { syncResult ->
-                    call.respond(HttpStatusCode.OK, mapOf(
-                        "success" to true,
-                        "message" to "Synced ${syncResult.totalFetched} orders (${syncResult.savedCount} new, ${syncResult.updatedCount} updated)",
-                        "totalFetched" to syncResult.totalFetched,
-                        "savedCount" to syncResult.savedCount,
-                        "updatedCount" to syncResult.updatedCount,
-                        "totalPages" to syncResult.totalPages,
-                        "currentPage" to syncResult.currentPage
+                    call.respond(HttpStatusCode.OK, SyncOrdersResponse(
+                        success = true,
+                        message = "Synced ${syncResult.totalFetched} orders (${syncResult.savedCount} new, ${syncResult.updatedCount} updated)",
+                        totalFetched = syncResult.totalFetched,
+                        savedCount = syncResult.savedCount,
+                        updatedCount = syncResult.updatedCount,
+                        totalPages = syncResult.totalPages,
+                        currentPage = syncResult.currentPage
                     ))
                 },
                 onFailure = { error ->
-                    call.respond(HttpStatusCode.BadRequest, mapOf(
-                        "error" to "Sync failed",
-                        "message" to error.message
+                    call.respond(HttpStatusCode.BadRequest, SyncOrdersResponse(
+                        success = false,
+                        message = error.message ?: "Sync failed",
+                        totalFetched = 0,
+                        savedCount = 0,
+                        updatedCount = 0,
+                        totalPages = 0,
+                        currentPage = 0
                     ))
                 }
             )
@@ -497,6 +502,17 @@ data class SyncStoresResponse(
     val success: Boolean,
     val message: String,
     val stores: List<StoreInfo>
+)
+
+@Serializable
+data class SyncOrdersResponse(
+    val success: Boolean,
+    val message: String,
+    val totalFetched: Int,
+    val savedCount: Int,
+    val updatedCount: Int,
+    val totalPages: Int,
+    val currentPage: Int
 )
 
 @Serializable
