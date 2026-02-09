@@ -54,6 +54,9 @@ function SettingsLayout({ children }: { children: React.ReactNode }) {
 }
 
 function StoreSettings() {
+  // TODO: Fetch from API and use tenant store
+  // const { tenant } = useTenantStore();
+
   return (
     <div className="bg-card border border-border rounded-xl p-6 space-y-6">
       <h2 className="text-lg font-semibold">Store Settings</h2>
@@ -63,7 +66,7 @@ function StoreSettings() {
           <label className="block text-sm font-medium mb-1">Store Name</label>
           <input
             type="text"
-            defaultValue="My Awesome Store"
+            placeholder="Enter your store name"
             className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
@@ -74,7 +77,7 @@ function StoreSettings() {
             <span className="text-muted-foreground">https://</span>
             <input
               type="text"
-              defaultValue="my-store"
+              placeholder="your-store"
               className="flex-1 px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
             />
             <span className="text-muted-foreground">.printnest.com</span>
@@ -85,7 +88,7 @@ function StoreSettings() {
           <label className="block text-sm font-medium mb-1">Description</label>
           <textarea
             rows={3}
-            defaultValue="Welcome to my print-on-demand store!"
+            placeholder="Describe your store..."
             className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring resize-none"
           />
         </div>
@@ -266,14 +269,10 @@ function ShipStationSettings() {
     setError(null);
 
     try {
-      // TODO: Call API to sync stores
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      // Mock data
-      setStores([
-        { id: 1, shipstationStoreId: 12345, storeName: 'Etsy Store', marketplaceName: 'Etsy', isActive: true },
-        { id: 2, shipstationStoreId: 12346, storeName: 'Shopify Store', marketplaceName: 'Shopify', isActive: true },
-        { id: 3, shipstationStoreId: 12347, storeName: 'Amazon Store', marketplaceName: 'Amazon', isActive: false },
-      ]);
+      // TODO: Call API to sync stores from ShipStation
+      // const response = await apiClient.post('/shipstation/sync-stores');
+      // setStores(response.data.stores);
+      setError('ShipStation sync not implemented yet. Configure in Settings after connecting.');
     } catch {
       setError('Failed to sync stores from ShipStation.');
     } finally {
@@ -455,35 +454,19 @@ interface Subdealer {
 }
 
 function SubdealersSettings() {
-  const [subdealers, setSubdealers] = useState<Subdealer[]>([
-    {
-      id: 1,
-      email: 'john@example.com',
-      firstName: 'John',
-      lastName: 'Doe',
-      fullName: 'John Doe',
-      status: 1,
-      totalCredit: '150.00',
-      assignedStores: [
-        { id: 1, shipstationStoreId: 12345, storeName: 'Etsy Store', marketplaceName: 'Etsy', isActive: true },
-      ],
-      createdAt: '2024-01-15',
-    },
-    {
-      id: 2,
-      email: 'jane@example.com',
-      firstName: 'Jane',
-      lastName: 'Smith',
-      fullName: 'Jane Smith',
-      status: 1,
-      totalCredit: '0.00',
-      assignedStores: [
-        { id: 2, shipstationStoreId: 12346, storeName: 'Shopify Store', marketplaceName: 'Shopify', isActive: true },
-        { id: 3, shipstationStoreId: 12347, storeName: 'Amazon Store', marketplaceName: 'Amazon', isActive: true },
-      ],
-      createdAt: '2024-02-20',
-    },
-  ]);
+  const [subdealers, setSubdealers] = useState<Subdealer[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // TODO: Fetch subdealers from API
+  // useEffect(() => {
+  //   const fetchSubdealers = async () => {
+  //     setIsLoading(true);
+  //     const response = await apiClient.get('/subdealers');
+  //     setSubdealers(response.data.subdealers);
+  //     setIsLoading(false);
+  //   };
+  //   fetchSubdealers();
+  // }, []);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newSubdealer, setNewSubdealer] = useState({
@@ -567,6 +550,15 @@ function SubdealersSettings() {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
+            {subdealers.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-6 py-12 text-center">
+                  <Users className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">No sub-dealers yet</p>
+                  <p className="text-sm text-muted-foreground mt-1">Add a sub-dealer to get started</p>
+                </td>
+              </tr>
+            ) : null}
             {subdealers.map((subdealer) => (
               <tr key={subdealer.id} className="hover:bg-muted/30">
                 <td className="px-6 py-4 whitespace-nowrap">
