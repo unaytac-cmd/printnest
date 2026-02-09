@@ -111,46 +111,46 @@ class ShipStationService(
 
                         // Build shipping address JSON
                         val shippingAddressJson = ssOrder.shipTo?.let { addr ->
-                            json.encodeToString(mapOf(
-                                "name" to addr.name,
-                                "company" to addr.company,
-                                "street1" to addr.street1,
-                                "street2" to addr.street2,
-                                "city" to addr.city,
-                                "state" to addr.state,
-                                "zip" to addr.postalCode,
-                                "country" to addr.country,
-                                "phone" to addr.phone
-                            ))
+                            buildJsonObject {
+                                addr.name?.let { put("name", it) }
+                                addr.company?.let { put("company", it) }
+                                addr.street1?.let { put("street1", it) }
+                                addr.street2?.let { put("street2", it) }
+                                addr.city?.let { put("city", it) }
+                                addr.state?.let { put("state", it) }
+                                addr.postalCode?.let { put("zip", it) }
+                                addr.country?.let { put("country", it) }
+                                addr.phone?.let { put("phone", it) }
+                            }.toString()
                         } ?: "{}"
 
                         // Build billing address JSON
                         val billingAddressJson = ssOrder.billTo?.let { addr ->
-                            json.encodeToString(mapOf(
-                                "name" to addr.name,
-                                "company" to addr.company,
-                                "street1" to addr.street1,
-                                "street2" to addr.street2,
-                                "city" to addr.city,
-                                "state" to addr.state,
-                                "zip" to addr.postalCode,
-                                "country" to addr.country,
-                                "phone" to addr.phone
-                            ))
+                            buildJsonObject {
+                                addr.name?.let { put("name", it) }
+                                addr.company?.let { put("company", it) }
+                                addr.street1?.let { put("street1", it) }
+                                addr.street2?.let { put("street2", it) }
+                                addr.city?.let { put("city", it) }
+                                addr.state?.let { put("state", it) }
+                                addr.postalCode?.let { put("zip", it) }
+                                addr.country?.let { put("country", it) }
+                                addr.phone?.let { put("phone", it) }
+                            }.toString()
                         } ?: "{}"
 
                         // Build order info JSON
-                        val orderInfoJson = json.encodeToString(mapOf(
-                            "customerNotes" to ssOrder.customerNotes,
-                            "internalNotes" to ssOrder.internalNotes,
-                            "requestedShippingService" to ssOrder.requestedShippingService,
-                            "carrierCode" to ssOrder.carrierCode,
-                            "serviceCode" to ssOrder.serviceCode,
-                            "gift" to ssOrder.gift,
-                            "paymentMethod" to ssOrder.paymentMethod,
-                            "orderDate" to ssOrder.orderDate,
-                            "shipByDate" to ssOrder.shipByDate
-                        ))
+                        val orderInfoJson = buildJsonObject {
+                            ssOrder.customerNotes?.let { put("customerNotes", it) }
+                            ssOrder.internalNotes?.let { put("internalNotes", it) }
+                            ssOrder.requestedShippingService?.let { put("requestedShippingService", it) }
+                            ssOrder.carrierCode?.let { put("carrierCode", it) }
+                            ssOrder.serviceCode?.let { put("serviceCode", it) }
+                            put("gift", ssOrder.gift)
+                            ssOrder.paymentMethod?.let { put("paymentMethod", it) }
+                            ssOrder.orderDate?.let { put("orderDate", it) }
+                            ssOrder.shipByDate?.let { put("shipByDate", it) }
+                        }.toString()
 
                         // Build order detail JSON (raw ShipStation data)
                         val orderDetailJson = json.encodeToString(ssOrder)
