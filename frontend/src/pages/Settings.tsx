@@ -455,18 +455,8 @@ interface Subdealer {
 
 function SubdealersSettings() {
   const [subdealers, setSubdealers] = useState<Subdealer[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
 
-  // TODO: Fetch subdealers from API
-  // useEffect(() => {
-  //   const fetchSubdealers = async () => {
-  //     setIsLoading(true);
-  //     const response = await apiClient.get('/subdealers');
-  //     setSubdealers(response.data.subdealers);
-  //     setIsLoading(false);
-  //   };
-  //   fetchSubdealers();
-  // }, []);
+  // TODO: Fetch subdealers from API using useEffect
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newSubdealer, setNewSubdealer] = useState({
