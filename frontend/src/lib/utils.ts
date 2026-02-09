@@ -102,6 +102,12 @@ export function getSubdomain(hostname: string): string | null {
     return null;
   }
 
+  // Handle IP addresses (including nip.io) - no subdomain
+  const isIPAddress = /^(\d{1,3}\.){3}\d{1,3}(\.nip\.io)?$/.test(hostname);
+  if (isIPAddress) {
+    return null;
+  }
+
   // Handle regular domains (e.g., tenant.printnest.com)
   if (parts.length > 2) {
     return parts[0];
