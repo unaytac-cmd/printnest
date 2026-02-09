@@ -83,8 +83,7 @@ function getNavigationGroups(role: UserRole | undefined): NavGroup[] {
       {
         title: 'Settings',
         items: [
-          { title: 'Account', href: '/settings/account', icon: Settings },
-          { title: 'Notifications', href: '/settings/notifications', icon: Bell },
+          { title: 'Settings', href: '/settings', icon: Settings },
         ],
       },
     ];
