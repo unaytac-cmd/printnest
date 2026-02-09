@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- Console appender with pattern -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- JSON appender for production -->
+    <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="ch.qos.logback.core.encoder.LayoutWrappingEncoder">
+            <layout class="ch.qos.logback.contrib.json.classic.JsonLayout">
+                <jsonFormatter class="ch.qos.logback.contrib.jackson.JacksonJsonFormatter">
+                    <prettyPrint>false</prettyPrint>
+                </jsonFormatter>
+                <timestampFormat>yyyy-MM-dd'T'HH:mm:ss.SSS'Z'</timestampFormat>
+                <timestampFormatTimezoneId>UTC</timestampFormatTimezoneId>
+                <appendLineSeparator>true</appendLineSeparator>
+            </layout>
+        </encoder>
+    </appender>
+
+    <!-- Rolling file appender -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/printnest.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>logs/printnest.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>1GB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Async appender for file logging -->
+    <appender name="ASYNC_FILE" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>512</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <appender-ref ref="FILE"/>
+    </appender>
+
+    <!-- Logger configurations -->
+
+    <!-- Application loggers -->
+    <logger name="com.printnest" level="DEBUG"/>
+
+    <!-- Ktor loggers -->
+    <logger name="io.ktor" level="INFO"/>
+    <logger name="io.ktor.server.application" level="INFO"/>
+
+    <!-- Database loggers -->
+    <logger name="org.jetbrains.exposed" level="INFO"/>
+    <logger name="com.zaxxer.hikari" level="INFO"/>
+    <logger name="com.zaxxer.hikari.HikariConfig" level="DEBUG"/>
+
+    <!-- HTTP client logger -->
+    <logger name="HttpClient" level="DEBUG"/>
+
+    <!-- Redis logger -->
+    <logger name="io.lettuce" level="INFO"/>
+
+    <!-- AWS SDK logger -->
+    <logger name="software.amazon.awssdk" level="WARN"/>
+
+    <!-- Stripe logger -->
+    <logger name="com.stripe" level="INFO"/>
+
+    <!-- Koin logger -->
+    <logger name="org.koin" level="INFO"/>
+
+    <!-- Netty logger -->
+    <logger name="io.netty" level="WARN"/>
+
+    <!-- Root logger -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <!-- Uncomment for file logging -->
+        <!-- <appender-ref ref="ASYNC_FILE"/> -->
+    </root>
+</configuration>

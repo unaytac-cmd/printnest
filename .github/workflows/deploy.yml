@@ -1,0 +1,138 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  REGISTRY: ghcr.io
+  BACKEND_IMAGE: ${{ github.repository }}/backend
+  FRONTEND_IMAGE: ${{ github.repository }}/frontend
+
+jobs:
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    environment: staging
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to staging server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            cd /opt/printnest
+
+            # Pull latest images
+            docker pull ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:latest
+            docker pull ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:latest
+
+            # Update and restart services
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+            # Clean up old images
+            docker image prune -f
+
+            # Health check
+            sleep 30
+            curl -f http://localhost:8080/health || exit 1
+            echo "Deployment successful!"
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production'
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to production server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USER }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            cd /opt/printnest
+
+            # Pull latest images
+            docker pull ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:latest
+            docker pull ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:latest
+
+            # Backup database before deployment
+            docker exec printnest-postgres pg_dump -U $DB_USER $DB_NAME > /opt/backups/db_$(date +%Y%m%d_%H%M%S).sql
+
+            # Update and restart services with zero downtime
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+            # Clean up old images
+            docker image prune -f
+
+            # Health check
+            sleep 30
+            curl -f http://localhost:8080/health || exit 1
+            echo "Production deployment successful!"
+
+      - name: Notify on success
+        if: success()
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          payload: |
+            {
+              "text": "Production deployment successful!",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": ":white_check_mark: *PrintNest Production Deployed*\nCommit: ${{ github.sha }}\nBy: ${{ github.actor }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Notify on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          payload: |
+            {
+              "text": "Production deployment failed!",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": ":x: *PrintNest Production Deployment Failed*\nCommit: ${{ github.sha }}\nBy: ${{ github.actor }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

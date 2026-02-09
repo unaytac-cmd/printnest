@@ -1,0 +1,25 @@
+# Build directories
+build/
+.gradle/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Test results
+test-results/

@@ -1,0 +1,47 @@
+# Environment files
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Backend
+backend/build/
+backend/.gradle/
+backend/*.log
+backend/out/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/*.log
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temp files
+tmp/
+temp/
+*.tmp
+
+# SSL certificates (production)
+nginx/ssl/
+nginx/certbot/
+
+# Backups
+*.sql
+*.sql.gz
+backups/
