@@ -2,6 +2,7 @@ import { BarChart3, DollarSign, Package, ShoppingCart, TrendingUp, TrendingDown,
 import { cn } from '@/lib/utils';
 import { useDashboard } from '@/api/hooks/useDashboard';
 import { useTenant } from '@/stores/tenantStore';
+import { useIsSubdealer, useAssignedStoreIds } from '@/stores/authStore';
 import { useState, useEffect } from 'react';
 import apiClient from '@/api/client';
 
@@ -93,12 +94,30 @@ function RecentOrder({ customer, product, amount, status }: RecentOrderProps) {
   );
 }
 
-function EmptyState({ isShipStationConnected, onSyncOrders, isSyncing }: {
+interface EmptyStateProps {
   isShipStationConnected: boolean;
+  isSubdealer: boolean;
+  hasAssignedStores: boolean;
   onSyncOrders: () => void;
   isSyncing: boolean;
-}) {
-  if (!isShipStationConnected) {
+}
+
+function EmptyState({ isShipStationConnected, isSubdealer, hasAssignedStores, onSyncOrders, isSyncing }: EmptyStateProps) {
+  // Subdealer without assigned stores
+  if (isSubdealer && !hasAssignedStores) {
+    return (
+      <div className="text-center py-12">
+        <Package className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
+        <h3 className="text-lg font-semibold mb-2">No stores assigned</h3>
+        <p className="text-muted-foreground">
+          Contact your producer to assign stores to your account.
+        </p>
+      </div>
+    );
+  }
+
+  // Producer: ShipStation not connected
+  if (!isSubdealer && !isShipStationConnected) {
     return (
       <div className="text-center py-12">
         <Package className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
@@ -116,12 +135,15 @@ function EmptyState({ isShipStationConnected, onSyncOrders, isSyncing }: {
     );
   }
 
+  // Ready to sync
   return (
     <div className="text-center py-12">
       <Package className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
       <h3 className="text-lg font-semibold mb-2">No orders yet</h3>
       <p className="text-muted-foreground mb-6">
-        ShipStation is connected. Sync your orders to get started.
+        {isSubdealer
+          ? 'Sync orders from your assigned stores to get started.'
+          : 'ShipStation is connected. Sync your orders to get started.'}
       </p>
       <button
         onClick={onSyncOrders}
@@ -138,13 +160,24 @@ function EmptyState({ isShipStationConnected, onSyncOrders, isSyncing }: {
 export default function Dashboard() {
   const { data, isLoading, refetch } = useDashboard();
   const tenant = useTenant();
+  const isSubdealer = useIsSubdealer();
+  const assignedStoreIds = useAssignedStoreIds();
+  const hasAssignedStores = assignedStoreIds.length > 0;
+
   const [isShipStationConnected, setIsShipStationConnected] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isCheckingConnection, setIsCheckingConnection] = useState(true);
 
-  // Check if ShipStation is connected
+  // Check if ShipStation is connected (only for producers)
   useEffect(() => {
     const checkConnection = async () => {
+      // Subdealers don't need to check ShipStation connection - they rely on assigned stores
+      if (isSubdealer) {
+        setIsShipStationConnected(hasAssignedStores);
+        setIsCheckingConnection(false);
+        return;
+      }
+
       try {
         const response = await apiClient.get('/settings');
         const settings = response.data;
@@ -158,12 +191,21 @@ export default function Dashboard() {
       }
     };
     checkConnection();
-  }, []);
+  }, [isSubdealer, hasAssignedStores]);
 
   const handleSyncOrders = async () => {
     setIsSyncing(true);
     try {
-      await apiClient.post('/shipstation/sync-orders');
+      // For subdealers, sync only from assigned stores
+      if (isSubdealer && hasAssignedStores) {
+        // Sync each assigned store
+        for (const storeId of assignedStoreIds) {
+          await apiClient.post('/shipstation/sync-orders', { storeId });
+        }
+      } else {
+        // Producer: sync all stores
+        await apiClient.post('/shipstation/sync-orders', {});
+      }
       // Refetch dashboard data after sync
       refetch();
     } catch (err) {
@@ -192,6 +234,11 @@ export default function Dashboard() {
   };
 
   const recentOrders = data?.recentOrders || [];
+
+  // Determine if sync should be enabled
+  const canSync = isSubdealer
+    ? hasAssignedStores
+    : isShipStationConnected;
 
   return (
     <div className="space-y-6">
@@ -269,6 +316,8 @@ export default function Dashboard() {
           ) : (
             <EmptyState
               isShipStationConnected={isShipStationConnected}
+              isSubdealer={isSubdealer}
+              hasAssignedStores={hasAssignedStores}
               onSyncOrders={handleSyncOrders}
               isSyncing={isSyncing}
             />
@@ -281,7 +330,7 @@ export default function Dashboard() {
           <div className="space-y-3">
             <button
               onClick={handleSyncOrders}
-              disabled={isSyncing || !isShipStationConnected}
+              disabled={isSyncing || !canSync}
               className="w-full flex items-center gap-3 p-3 rounded-lg bg-primary/5 hover:bg-primary/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-left"
             >
               <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -290,7 +339,9 @@ export default function Dashboard() {
               <div>
                 <p className="font-medium">{isSyncing ? 'Syncing...' : 'Sync Orders'}</p>
                 <p className="text-sm text-muted-foreground">
-                  {isShipStationConnected ? 'Import from ShipStation' : 'Connect ShipStation first'}
+                  {isSubdealer
+                    ? (hasAssignedStores ? 'Import from assigned stores' : 'No stores assigned')
+                    : (isShipStationConnected ? 'Import from ShipStation' : 'Connect ShipStation first')}
                 </p>
               </div>
             </button>
@@ -309,16 +360,16 @@ export default function Dashboard() {
               </div>
             </a>
             <a
-              href="/products"
+              href="/orders"
               className="flex items-center gap-3 p-3 rounded-lg bg-primary/5 hover:bg-primary/10 transition-colors"
             >
               <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
                 <Package className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <p className="font-medium">Manage Products</p>
+                <p className="font-medium">View Orders</p>
                 <p className="text-sm text-muted-foreground">
-                  Add or edit products
+                  Manage your orders
                 </p>
               </div>
             </a>

@@ -3,6 +3,7 @@ import { Routes, Route, Link } from 'react-router-dom';
 import { Search, Package, CheckCircle, Clock, XCircle, Loader2, Plus, Truck, AlertCircle, Edit2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useOrders } from '@/hooks/useOrders';
+import { useIsSubdealer, useAssignedStoreIds } from '@/stores/authStore';
 import { OrderStatusCodes, getOrderStatusLabel, getOrderStatusColor } from '@/types';
 import NewOrder from './orders/NewOrder';
 
@@ -12,11 +13,19 @@ function OrdersList() {
   const [page, setPage] = useState(1);
   const pageSize = 20;
 
+  const isSubdealer = useIsSubdealer();
+  const assignedStoreIds = useAssignedStoreIds();
+
+  // For subdealers, filter by their first assigned store (backend should handle multiple)
+  // TODO: Backend should filter by user's assigned stores automatically
+  const storeFilter = isSubdealer && assignedStoreIds.length > 0 ? assignedStoreIds[0] : undefined;
+
   const { data, isLoading, error } = useOrders({
     page,
     pageSize,
     search: searchQuery || undefined,
     status: statusFilter === 'all' ? undefined : statusFilter,
+    storeId: storeFilter,
   });
 
   const orders = data?.data || [];
