@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
-import { useAuthStore, useIsAuthenticated, useAuthLoading } from '@/stores/authStore';
+import { useAuthStore, useIsAuthenticated, useAuthLoading, useIsSubdealer } from '@/stores/authStore';
 import { useTenantStore } from '@/stores/tenantStore';
 import { useTenantFromSubdomain } from '@/hooks/useTenant';
 
@@ -58,6 +58,17 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return <>{children}</>;
+}
+
+// Producer-only route wrapper (blocks subdealers)
+function ProducerRoute({ children }: { children: React.ReactNode }) {
+  const isSubdealer = useIsSubdealer();
+
+  if (isSubdealer) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <>{children}</>;
@@ -216,8 +227,8 @@ function App() {
           <Route path="gangsheet/*" element={<Gangsheet />} />
           <Route path="mapping" element={<Mapping />} />
 
-          {/* Settings routes */}
-          <Route path="settings/*" element={<Settings />} />
+          {/* Settings routes (producer only) */}
+          <Route path="settings/*" element={<ProducerRoute><Settings /></ProducerRoute>} />
         </Route>
 
         {/* Super Admin routes */}

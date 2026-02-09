@@ -76,17 +76,9 @@ function getNavigationGroups(role: UserRole | undefined): NavGroup[] {
     ];
   }
 
-  // Sub-dealer navigation (limited)
+  // Sub-dealer navigation (limited - no settings access)
   if (isSubdealer) {
-    return [
-      ...baseGroups,
-      {
-        title: 'Settings',
-        items: [
-          { title: 'Settings', href: '/settings', icon: Settings },
-        ],
-      },
-    ];
+    return baseGroups;
   }
 
   // Default navigation (legacy roles)
