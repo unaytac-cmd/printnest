@@ -136,6 +136,7 @@ class PdfService(
 
                     val key = "$PDF_PREFIX/$tenantId/packing-slips/$fileId/$fileName"
                     val fileUrl = uploadPdfToS3(tenantId, pdfBytes, key, fileName)
+                        ?: throw IllegalStateException("Failed to upload PDF to S3")
 
                     generatedFiles.add(PdfFileInfo(
                         orderId = order.id,
@@ -1372,6 +1373,7 @@ class PdfService(
         // This is a simplified version - in production you might want to store file metadata in DB
         return try {
             val url = s3Service.generateDownloadUrl(tenantId, "$key/packing-slips/$fileId", 3600)
+                ?: return null
             PdfDownloadInfo(
                 fileId = fileId,
                 fileName = "document.pdf",
