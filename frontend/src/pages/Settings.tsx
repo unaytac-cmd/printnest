@@ -258,7 +258,7 @@ function ShipStationSettings() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch saved settings on mount
+  // Fetch saved settings and stores on mount
   useEffect(() => {
     const fetchSettings = async () => {
       try {
@@ -267,7 +267,20 @@ function ShipStationSettings() {
         if (settings.shipstationSettings) {
           setApiKey(settings.shipstationSettings.apiKey || '');
           setApiSecret(settings.shipstationSettings.apiSecret || '');
-          setIsConnected(settings.shipstationSettings.isConnected || (settings.shipstationSettings.apiKey && settings.shipstationSettings.apiSecret));
+          const connected = settings.shipstationSettings.isConnected || (settings.shipstationSettings.apiKey && settings.shipstationSettings.apiSecret);
+          setIsConnected(connected);
+
+          // If connected, fetch stores
+          if (connected) {
+            try {
+              const storesResponse = await apiClient.get('/shipstation/stores?includeInactive=true');
+              if (Array.isArray(storesResponse.data)) {
+                setStores(storesResponse.data);
+              }
+            } catch (storesErr) {
+              console.error('Failed to fetch stores:', storesErr);
+            }
+          }
         }
       } catch (err) {
         console.error('Failed to fetch settings:', err);
@@ -314,12 +327,8 @@ function ShipStationSettings() {
     try {
       const response = await apiClient.post('/shipstation/sync-stores');
       if (response.data.stores) {
-        setStores(response.data.stores.map((store: { id: number; storeName: string; marketplaceName?: string; isActive: boolean }) => ({
-          id: store.id,
-          name: store.storeName,
-          marketplace: store.marketplaceName || 'Unknown',
-          isActive: store.isActive
-        })));
+        // Backend returns: id, shipstationStoreId, storeName, marketplaceName, isActive
+        setStores(response.data.stores);
       }
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
