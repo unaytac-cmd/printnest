@@ -1,13 +1,17 @@
 package com.printnest.integrations.shipstation
 
 import com.printnest.domain.models.ShipStationStore
+import com.printnest.domain.repository.OrderRepository
 import com.printnest.domain.repository.ShipStationStoreRepository
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
+import java.math.BigDecimal
 
 class ShipStationService(
     private val client: ShipStationClient,
     private val storeRepository: ShipStationStoreRepository,
+    private val orderRepository: OrderRepository,
     private val json: Json
 ) {
     private val logger = LoggerFactory.getLogger(ShipStationService::class.java)
@@ -73,6 +77,7 @@ class ShipStationService(
      */
     suspend fun syncOrders(
         tenantId: Long,
+        userId: Long,
         apiKey: String,
         apiSecret: String,
         storeId: Long? = null,
@@ -91,14 +96,123 @@ class ShipStationService(
 
         return ordersResult.fold(
             onSuccess = { response ->
-                // TODO: Process orders and save to database
-                // This will be implemented in OrderService
-                logger.info("Fetched ${response.orders.size} orders from ShipStation")
+                var savedCount = 0
+                var updatedCount = 0
+
+                response.orders.forEach { ssOrder ->
+                    try {
+                        // Check if order exists
+                        val existingOrder = orderRepository.findByShipstationOrderId(tenantId, ssOrder.orderId)
+                        val isUpdate = existingOrder != null
+
+                        // Build shipping address JSON
+                        val shippingAddressJson = ssOrder.shipTo?.let { addr ->
+                            json.encodeToString(mapOf(
+                                "name" to addr.name,
+                                "company" to addr.company,
+                                "street1" to addr.street1,
+                                "street2" to addr.street2,
+                                "city" to addr.city,
+                                "state" to addr.state,
+                                "zip" to addr.postalCode,
+                                "country" to addr.country,
+                                "phone" to addr.phone
+                            ))
+                        } ?: "{}"
+
+                        // Build billing address JSON
+                        val billingAddressJson = ssOrder.billTo?.let { addr ->
+                            json.encodeToString(mapOf(
+                                "name" to addr.name,
+                                "company" to addr.company,
+                                "street1" to addr.street1,
+                                "street2" to addr.street2,
+                                "city" to addr.city,
+                                "state" to addr.state,
+                                "zip" to addr.postalCode,
+                                "country" to addr.country,
+                                "phone" to addr.phone
+                            ))
+                        } ?: "{}"
+
+                        // Build order info JSON
+                        val orderInfoJson = json.encodeToString(mapOf(
+                            "customerNotes" to ssOrder.customerNotes,
+                            "internalNotes" to ssOrder.internalNotes,
+                            "requestedShippingService" to ssOrder.requestedShippingService,
+                            "carrierCode" to ssOrder.carrierCode,
+                            "serviceCode" to ssOrder.serviceCode,
+                            "gift" to ssOrder.gift,
+                            "paymentMethod" to ssOrder.paymentMethod,
+                            "orderDate" to ssOrder.orderDate,
+                            "shipByDate" to ssOrder.shipByDate
+                        ))
+
+                        // Build order detail JSON (raw ShipStation data)
+                        val orderDetailJson = json.encodeToString(ssOrder)
+
+                        // Find shipstation store ID in our database
+                        val shipstationStoreId = ssOrder.advancedOptions?.storeId?.let { ssStoreId ->
+                            storeRepository.findByShipStationStoreId(tenantId, ssStoreId)?.id
+                        }
+
+                        // Upsert order
+                        val orderId = orderRepository.upsertShipStationOrder(
+                            tenantId = tenantId,
+                            userId = userId,
+                            shipstationStoreId = shipstationStoreId,
+                            shipstationOrderId = ssOrder.orderId,
+                            orderNumber = ssOrder.orderNumber,
+                            orderStatus = ssOrder.orderStatus,
+                            customerEmail = ssOrder.customerEmail,
+                            customerName = ssOrder.shipTo?.name ?: ssOrder.customerUsername,
+                            shippingAddress = shippingAddressJson,
+                            billingAddress = billingAddressJson,
+                            orderInfo = orderInfoJson,
+                            orderDetail = orderDetailJson,
+                            totalAmount = BigDecimal.valueOf(ssOrder.orderTotal),
+                            shippingAmount = BigDecimal.valueOf(ssOrder.shippingAmount),
+                            taxAmount = BigDecimal.valueOf(ssOrder.taxAmount),
+                            giftNote = if (ssOrder.gift) ssOrder.giftMessage else null
+                        )
+
+                        // Upsert order items
+                        ssOrder.items.forEach { item ->
+                            val productDetailJson = json.encodeToString(mapOf(
+                                "sku" to item.sku,
+                                "name" to item.name,
+                                "options" to item.options?.map { opt -> "${opt.name}: ${opt.value}" },
+                                "weight" to item.weight?.value,
+                                "weightUnits" to item.weight?.units
+                            ))
+
+                            orderRepository.upsertShipStationOrderProduct(
+                                tenantId = tenantId,
+                                orderId = orderId,
+                                shipstationItemId = item.orderItemId,
+                                sku = item.sku,
+                                name = item.name,
+                                imageUrl = item.imageUrl,
+                                quantity = item.quantity,
+                                unitPrice = BigDecimal.valueOf(item.unitPrice),
+                                productDetail = productDetailJson
+                            )
+                        }
+
+                        if (isUpdate) updatedCount++ else savedCount++
+                    } catch (e: Exception) {
+                        logger.error("Failed to save order ${ssOrder.orderId}", e)
+                    }
+                }
+
+                logger.info("Synced ${response.orders.size} orders from ShipStation: $savedCount new, $updatedCount updated")
                 Result.success(SyncOrdersResult(
                     totalFetched = response.orders.size,
                     totalPages = response.pages,
                     currentPage = response.page,
-                    orders = response.orders
+                    orders = response.orders,
+                    savedCount = savedCount,
+                    updatedCount = updatedCount
                 ))
             },
             onFailure = { error ->
@@ -275,5 +389,7 @@ data class SyncOrdersResult(
     val totalFetched: Int,
     val totalPages: Int,
     val currentPage: Int,
-    val orders: List<ShipStationOrderResponse>
+    val orders: List<ShipStationOrderResponse>,
+    val savedCount: Int = 0,
+    val updatedCount: Int = 0
 )

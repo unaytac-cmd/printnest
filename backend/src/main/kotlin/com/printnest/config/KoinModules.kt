@@ -191,7 +191,7 @@ fun koinModules() = module {
     }
 
     single { ShipStationClient(get(), get()) }
-    single { ShipStationService(get(), get(), get()) }
+    single { ShipStationService(get(), get(), get(), get()) }
 
     // Etsy Integration
     single { EtsyAuthService(get(), get()) }

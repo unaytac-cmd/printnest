@@ -970,4 +970,156 @@ class OrderRepository : KoinComponent {
 
     // NOTE: findOrderProducts is defined earlier in this file at line 361
     // Use findOrderProducts(orderId, tenantId) instead
+
+    // =====================================================
+    // SHIPSTATION INTEGRATION METHODS
+    // =====================================================
+
+    /**
+     * Find order by ShipStation order ID
+     */
+    fun findByShipstationOrderId(tenantId: Long, shipstationOrderId: Long): OrderFull? = transaction {
+        Orders.selectAll()
+            .where { (Orders.tenantId eq tenantId) and (Orders.shipstationOrderId eq shipstationOrderId) }
+            .singleOrNull()
+            ?.toOrderFull()
+    }
+
+    /**
+     * Upsert (insert or update) a ShipStation order
+     * Returns the order ID
+     */
+    fun upsertShipStationOrder(
+        tenantId: Long,
+        userId: Long,
+        shipstationStoreId: Long?,
+        shipstationOrderId: Long,
+        orderNumber: String,
+        orderStatus: String,
+        customerEmail: String?,
+        customerName: String?,
+        shippingAddress: String,
+        billingAddress: String,
+        orderInfo: String,
+        orderDetail: String,
+        totalAmount: java.math.BigDecimal,
+        shippingAmount: java.math.BigDecimal,
+        taxAmount: java.math.BigDecimal,
+        giftNote: String?
+    ): Long = transaction {
+        // Check if order already exists
+        val existingOrder = Orders.selectAll()
+            .where { (Orders.tenantId eq tenantId) and (Orders.shipstationOrderId eq shipstationOrderId) }
+            .singleOrNull()
+
+        if (existingOrder != null) {
+            // Update existing order
+            val orderId = existingOrder[Orders.id].value
+            Orders.update({ Orders.id eq orderId }) {
+                it[this.orderStatus] = mapShipStationStatus(orderStatus)
+                it[this.customerEmail] = customerEmail
+                it[this.customerName] = customerName
+                it[this.shippingAddress] = shippingAddress
+                it[this.billingAddress] = billingAddress
+                it[this.orderInfo] = orderInfo
+                it[this.orderDetail] = orderDetail
+                it[this.totalAmount] = totalAmount
+                it[this.shippingAmount] = shippingAmount
+                it[this.taxAmount] = taxAmount
+                it[this.giftNote] = giftNote
+                it[updatedAt] = Instant.now()
+            }
+            orderId
+        } else {
+            // Insert new order
+            val intOrderId = "SS_$shipstationOrderId"
+            Orders.insertAndGetId {
+                it[this.tenantId] = tenantId
+                it[this.userId] = userId
+                it[this.shipstationStoreId] = shipstationStoreId
+                it[this.shipstationOrderId] = shipstationOrderId
+                it[this.intOrderId] = intOrderId
+                it[externalOrderId] = orderNumber
+                it[orderType] = 0
+                it[this.orderStatus] = mapShipStationStatus(orderStatus)
+                it[orderMapStatus] = 0 // NOT_MAPPED
+                it[this.customerEmail] = customerEmail
+                it[this.customerName] = customerName
+                it[this.shippingAddress] = shippingAddress
+                it[this.billingAddress] = billingAddress
+                it[this.orderInfo] = orderInfo
+                it[this.orderDetail] = orderDetail
+                it[this.totalAmount] = totalAmount
+                it[this.shippingAmount] = shippingAmount
+                it[this.taxAmount] = taxAmount
+                it[this.giftNote] = giftNote
+                it[createdAt] = Instant.now()
+                it[updatedAt] = Instant.now()
+            }.value
+        }
+    }
+
+    /**
+     * Upsert ShipStation order product
+     */
+    fun upsertShipStationOrderProduct(
+        tenantId: Long,
+        orderId: Long,
+        shipstationItemId: Long,
+        sku: String?,
+        name: String?,
+        imageUrl: String?,
+        quantity: Int,
+        unitPrice: java.math.BigDecimal,
+        productDetail: String
+    ): Long = transaction {
+        // Check if product already exists by SKU and order
+        val existingProduct = OrderProducts.selectAll()
+            .where {
+                (OrderProducts.orderId eq orderId) and
+                (OrderProducts.tenantId eq tenantId) and
+                (OrderProducts.listingId eq shipstationItemId.toString())
+            }
+            .singleOrNull()
+
+        if (existingProduct != null) {
+            // Update existing product
+            val productId = existingProduct[OrderProducts.id].value
+            OrderProducts.update({ OrderProducts.id eq productId }) {
+                it[this.quantity] = quantity
+                it[this.unitPrice] = unitPrice
+                it[this.productDetail] = productDetail
+                it[this.listingImageUrl] = imageUrl
+            }
+            productId
+        } else {
+            // Insert new product
+            OrderProducts.insertAndGetId {
+                it[this.tenantId] = tenantId
+                it[this.orderId] = orderId
+                it[this.listingId] = shipstationItemId.toString()
+                it[this.quantity] = quantity
+                it[this.unitPrice] = unitPrice
+                it[this.productDetail] = productDetail
+                it[this.listingImageUrl] = imageUrl
+                it[status] = 0
+                it[createdAt] = Instant.now()
+            }.value
+        }
+    }
+
+    /**
+     * Map ShipStation order status to PrintNest order status
+     */
+    private fun mapShipStationStatus(ssStatus: String): Int {
+        return when (ssStatus.lowercase()) {
+            "awaiting_payment" -> 4   // PAYMENT_PENDING
+            "awaiting_shipment" -> 12 // PENDING
+            "pending_fulfillment" -> 12 // PENDING
+            "shipped" -> 20           // SHIPPED
+            "on_hold" -> 8            // EDITING (on hold)
+            "cancelled" -> 2          // CANCELLED
+            else -> 0                 // NEW_ORDER
+        }
+    }
 }

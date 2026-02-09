@@ -204,6 +204,9 @@ fun Route.shipStationRoutes() {
             val tenantId = call.request.headers["X-Tenant-Id"]?.toLongOrNull()
                 ?: return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Tenant ID required"))
 
+            val userId = call.request.headers["X-User-Id"]?.toLongOrNull()
+                ?: return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "User ID required"))
+
             val request = call.receive<ShipStationSyncOrdersRequest>()
 
             // Use credentials from request or fall back to tenant settings
@@ -231,6 +234,7 @@ fun Route.shipStationRoutes() {
 
             val result = shipStationService.syncOrders(
                 tenantId = tenantId,
+                userId = userId,
                 apiKey = apiKey,
                 apiSecret = apiSecret,
                 storeId = request.storeId,
@@ -242,8 +246,10 @@ fun Route.shipStationRoutes() {
                 onSuccess = { syncResult ->
                     call.respond(HttpStatusCode.OK, mapOf(
                         "success" to true,
-                        "message" to "Synced ${syncResult.totalFetched} orders",
+                        "message" to "Synced ${syncResult.totalFetched} orders (${syncResult.savedCount} new, ${syncResult.updatedCount} updated)",
                         "totalFetched" to syncResult.totalFetched,
+                        "savedCount" to syncResult.savedCount,
+                        "updatedCount" to syncResult.updatedCount,
                         "totalPages" to syncResult.totalPages,
                         "currentPage" to syncResult.currentPage
                     ))
