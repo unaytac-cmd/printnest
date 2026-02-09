@@ -105,9 +105,8 @@ export default function Register() {
           updatedAt: response.tenant.createdAt || new Date().toISOString(),
         });
 
-        // Tenant and user are already created, go directly to dashboard
-        // Onboarding settings can be configured later in Settings
-        navigate('/dashboard', { replace: true });
+        // Navigate to onboarding to complete setup
+        navigate('/onboarding', { replace: true });
       } catch (err: unknown) {
         const error = err as { response?: { data?: { error?: string } } };
         setError(error.response?.data?.error || 'Registration failed. Please try again.');

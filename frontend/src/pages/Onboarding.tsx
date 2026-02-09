@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CheckCircle,
-  Circle,
   CreditCard,
   Truck,
   Store,
@@ -114,24 +113,40 @@ export default function Onboarding() {
   });
   const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(false);
-  const [skippedSteps, setSkippedSteps] = useState<string[]>([]);
   const navigate = useNavigate();
-  const { login } = useAuthStore();
+  const { user, login, isAuthenticated } = useAuthStore();
+  const { tenant } = useTenantStore();
 
   useEffect(() => {
-    const data = localStorage.getItem('pendingOnboarding');
-    if (data) {
-      const parsed = JSON.parse(data);
-      setOnboardingData(parsed);
-      // Pre-fill business name from full name
+    // Check if user is authenticated (came from Register)
+    if (isAuthenticated && user && tenant) {
+      setOnboardingData({
+        fullName: `${user.firstName} ${user.lastName}`.trim(),
+        email: user.email,
+      });
+      // Pre-fill from tenant
       setApiConfig(prev => ({
         ...prev,
-        businessName: parsed.fullName + "'s Store",
+        businessName: tenant.name || `${user.firstName}'s Store`,
+        subdomain: tenant.slug || '',
       }));
     } else {
-      navigate('/welcome');
+      // Check localStorage (came from LandingPage)
+      const data = localStorage.getItem('pendingOnboarding');
+      if (data) {
+        const parsed = JSON.parse(data);
+        setOnboardingData(parsed);
+        // Pre-fill business name from full name
+        setApiConfig(prev => ({
+          ...prev,
+          businessName: parsed.fullName + "'s Store",
+        }));
+      } else {
+        // No auth and no pending data, redirect to register
+        navigate('/register');
+      }
     }
-  }, [navigate]);
+  }, [navigate, isAuthenticated, user, tenant]);
 
   const toggleSecret = (key: string) => {
     setShowSecrets({ ...showSecrets, [key]: !showSecrets[key] });
@@ -148,87 +163,156 @@ export default function Onboarding() {
     }
   };
 
+  // Validate current step - all required fields must be filled
+  const isCurrentStepValid = (): boolean => {
+    const stepId = steps[currentStep].id;
+    switch (stepId) {
+      case 'welcome':
+        return true; // No validation needed
+      case 'store':
+        return !!(apiConfig.businessName.trim() && apiConfig.subdomain.trim());
+      case 'shipstation':
+        return !!(apiConfig.shipstationApiKey.trim() && apiConfig.shipstationApiSecret.trim());
+      case 'payment':
+        return !!(apiConfig.stripeSecretKey.trim() && apiConfig.stripePublishableKey.trim());
+      case 'shipping':
+        // At least one shipping provider required
+        return !!(apiConfig.nestshipperApiKey.trim() || apiConfig.easypostApiKey.trim());
+      case 'storage':
+        return !!(
+          apiConfig.awsAccessKeyId.trim() &&
+          apiConfig.awsSecretAccessKey.trim() &&
+          apiConfig.awsS3Bucket.trim()
+        );
+      case 'gangsheet':
+        return !!(
+          apiConfig.gangsheetWidth &&
+          apiConfig.gangsheetHeight &&
+          apiConfig.gangsheetDpi
+        );
+      case 'complete':
+        return true;
+      default:
+        return true;
+    }
+  };
+
   const handleBack = () => {
     if (currentStep > 0) {
       setCurrentStep(currentStep - 1);
     }
   };
 
-  const handleSkip = () => {
-    setSkippedSteps([...skippedSteps, steps[currentStep].id]);
-    handleNext();
-  };
-
   const handleComplete = async () => {
     setIsLoading(true);
 
-    try {
-      // Call the onboarding complete API
-      const response = await apiClient.post('/auth/onboarding/complete', {
-        // User info
-        fullName: onboardingData?.fullName || '',
-        email: onboardingData?.email || '',
-        password: localStorage.getItem('pendingOnboardingPassword') || '',
-
-        // Store info
-        businessName: apiConfig.businessName,
-        subdomain: apiConfig.subdomain,
-        customDomain: apiConfig.customDomain || null,
-
-        // ShipStation
-        shipstationApiKey: apiConfig.shipstationApiKey || null,
-        shipstationApiSecret: apiConfig.shipstationApiSecret || null,
-
-        // Stripe
-        stripeSecretKey: apiConfig.stripeSecretKey || null,
-        stripePublishableKey: apiConfig.stripePublishableKey || null,
-        stripeWebhookSecret: apiConfig.stripeWebhookSecret || null,
-
-        // Shipping
+    // Build settings payload in the format expected by backend
+    const settingsPayload = {
+      name: apiConfig.businessName,
+      customDomain: apiConfig.customDomain || null,
+      shipstationSettings: {
+        apiKey: apiConfig.shipstationApiKey,
+        apiSecret: apiConfig.shipstationApiSecret,
+      },
+      stripeSettings: {
+        secretKey: apiConfig.stripeSecretKey,
+        publishableKey: apiConfig.stripePublishableKey,
+        webhookSecret: apiConfig.stripeWebhookSecret || null,
+      },
+      shippingSettings: {
         nestshipperApiKey: apiConfig.nestshipperApiKey || null,
         easypostApiKey: apiConfig.easypostApiKey || null,
+      },
+      awsSettings: {
+        accessKeyId: apiConfig.awsAccessKeyId,
+        secretAccessKey: apiConfig.awsSecretAccessKey,
+        region: apiConfig.awsRegion || 'us-east-1',
+        s3Bucket: apiConfig.awsS3Bucket,
+      },
+      gangsheetSettings: {
+        width: parseFloat(apiConfig.gangsheetWidth) || 22.0,
+        height: parseFloat(apiConfig.gangsheetHeight) || 72.0,
+        dpi: parseInt(apiConfig.gangsheetDpi) || 300,
+        spacing: parseFloat(apiConfig.gangsheetSpacing) || 0.25,
+        backgroundColor: apiConfig.gangsheetBackgroundColor || '#FFFFFF',
+        autoArrange: apiConfig.gangsheetAutoArrange,
+      },
+    };
 
-        // AWS S3
-        awsAccessKeyId: apiConfig.awsAccessKeyId || null,
-        awsSecretAccessKey: apiConfig.awsSecretAccessKey || null,
-        awsRegion: apiConfig.awsRegion || 'us-east-1',
-        awsS3Bucket: apiConfig.awsS3Bucket || null,
+    try {
+      if (isAuthenticated) {
+        // User already registered, just update tenant settings
+        await apiClient.put('/settings', settingsPayload);
 
-        // Gangsheet Settings
-        gangsheetWidth: parseFloat(apiConfig.gangsheetWidth) || 22.0,
-        gangsheetHeight: parseFloat(apiConfig.gangsheetHeight) || 72.0,
-        gangsheetDpi: parseInt(apiConfig.gangsheetDpi) || 300,
-        gangsheetSpacing: parseFloat(apiConfig.gangsheetSpacing) || 0.25,
-        gangsheetBackgroundColor: apiConfig.gangsheetBackgroundColor || '#FFFFFF',
-        gangsheetAutoArrange: apiConfig.gangsheetAutoArrange,
-      });
+        // Mark onboarding as complete in tenant store
+        useTenantStore.getState().updateTenant({
+          onboardingCompleted: true,
+          name: apiConfig.businessName,
+        });
 
-      const { user, accessToken, refreshToken } = response.data;
+        navigate('/dashboard');
+      } else {
+        // User coming from landing page, create account
+        const response = await apiClient.post('/auth/onboarding/complete', {
+          // User info
+          fullName: onboardingData?.fullName || '',
+          email: onboardingData?.email || '',
+          password: localStorage.getItem('pendingOnboardingPassword') || '',
+          // Store info
+          businessName: apiConfig.businessName,
+          subdomain: apiConfig.subdomain,
+          customDomain: apiConfig.customDomain || null,
+          // ShipStation
+          shipstationApiKey: apiConfig.shipstationApiKey,
+          shipstationApiSecret: apiConfig.shipstationApiSecret,
+          // Stripe
+          stripeSecretKey: apiConfig.stripeSecretKey,
+          stripePublishableKey: apiConfig.stripePublishableKey,
+          stripeWebhookSecret: apiConfig.stripeWebhookSecret || null,
+          // Shipping
+          nestshipperApiKey: apiConfig.nestshipperApiKey || null,
+          easypostApiKey: apiConfig.easypostApiKey || null,
+          // AWS S3
+          awsAccessKeyId: apiConfig.awsAccessKeyId,
+          awsSecretAccessKey: apiConfig.awsSecretAccessKey,
+          awsRegion: apiConfig.awsRegion || 'us-east-1',
+          awsS3Bucket: apiConfig.awsS3Bucket,
+          // Gangsheet Settings
+          gangsheetWidth: parseFloat(apiConfig.gangsheetWidth) || 22.0,
+          gangsheetHeight: parseFloat(apiConfig.gangsheetHeight) || 72.0,
+          gangsheetDpi: parseInt(apiConfig.gangsheetDpi) || 300,
+          gangsheetSpacing: parseFloat(apiConfig.gangsheetSpacing) || 0.25,
+          gangsheetBackgroundColor: apiConfig.gangsheetBackgroundColor || '#FFFFFF',
+          gangsheetAutoArrange: apiConfig.gangsheetAutoArrange,
+        });
 
-      // Clear pending onboarding data
-      localStorage.removeItem('pendingOnboarding');
-      localStorage.removeItem('pendingOnboardingPassword');
+        const { user: newUser, accessToken, refreshToken } = response.data;
 
-      // Login with the response data
-      login(
-        {
-          id: user.id.toString(),
-          email: user.email,
-          firstName: user.firstName || '',
-          lastName: user.lastName || '',
-          role: user.role,
-          emailVerified: user.emailVerified,
-          createdAt: user.createdAt,
-          updatedAt: user.createdAt,
-        },
-        accessToken,
-        refreshToken
-      );
+        // Clear pending onboarding data
+        localStorage.removeItem('pendingOnboarding');
+        localStorage.removeItem('pendingOnboardingPassword');
 
-      // Mark onboarding as complete in tenant store
-      useTenantStore.getState().updateTenant({ onboardingCompleted: true });
+        // Login with the response data
+        login(
+          {
+            id: newUser.id.toString(),
+            email: newUser.email,
+            firstName: newUser.firstName || '',
+            lastName: newUser.lastName || '',
+            role: newUser.role,
+            emailVerified: newUser.emailVerified,
+            createdAt: newUser.createdAt,
+            updatedAt: newUser.createdAt,
+          },
+          accessToken,
+          refreshToken
+        );
 
-      navigate('/dashboard');
+        // Mark onboarding as complete in tenant store
+        useTenantStore.getState().updateTenant({ onboardingCompleted: true });
+
+        navigate('/dashboard');
+      }
     } catch (error: any) {
       console.error('Onboarding failed:', error);
       const errorMessage = error.response?.data?.error || 'Failed to complete onboarding. Please try again.';
@@ -859,15 +943,6 @@ export default function Onboarding() {
               Your store is ready. You can update these settings anytime from your dashboard.
             </p>
 
-            {skippedSteps.length > 0 && (
-              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 max-w-sm mx-auto mb-6">
-                <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                  Skipped: {skippedSteps.map(s => steps.find(step => step.id === s)?.title).join(', ')}.
-                  Configure in Settings.
-                </p>
-              </div>
-            )}
-
             <div className="bg-muted/50 rounded-lg p-4 max-w-md mx-auto text-left">
               <h3 className="font-medium mb-3">Your store:</h3>
               <div className="space-y-2 text-sm">
@@ -921,7 +996,6 @@ export default function Onboarding() {
             {steps.map((step, index) => {
               const isComplete = index < currentStep;
               const isCurrent = index === currentStep;
-              const isSkipped = skippedSteps.includes(step.id);
 
               return (
                 <li key={step.id}>
@@ -935,14 +1009,13 @@ export default function Onboarding() {
                     <div
                       className={cn(
                         'w-7 h-7 rounded-full flex items-center justify-center text-xs',
-                        isComplete && !isSkipped && 'bg-green-100 text-green-600',
-                        isComplete && isSkipped && 'bg-yellow-100 text-yellow-600',
+                        isComplete && 'bg-green-100 text-green-600',
                         isCurrent && 'bg-primary text-primary-foreground',
                         !isComplete && !isCurrent && 'bg-muted'
                       )}
                     >
                       {isComplete ? (
-                        isSkipped ? <Circle className="w-3 h-3" /> : <CheckCircle className="w-3 h-3" />
+                        <CheckCircle className="w-3 h-3" />
                       ) : (
                         <step.icon className="w-3 h-3" />
                       )}
@@ -1004,16 +1077,11 @@ export default function Onboarding() {
             </button>
 
             <div className="flex items-center gap-3">
-              {currentStep > 0 && currentStep < steps.length - 1 && (
-                <button onClick={handleSkip} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">
-                  Skip
-                </button>
-              )}
-
               {currentStep < steps.length - 1 ? (
                 <button
                   onClick={handleNext}
-                  className="flex items-center gap-2 px-6 py-2 bg-primary text-primary-foreground rounded-lg text-sm hover:bg-primary/90"
+                  disabled={!isCurrentStepValid()}
+                  className="flex items-center gap-2 px-6 py-2 bg-primary text-primary-foreground rounded-lg text-sm hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Continue
                   <ArrowRight className="w-4 h-4" />
