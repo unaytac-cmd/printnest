@@ -312,12 +312,18 @@ function ShipStationSettings() {
     setError(null);
 
     try {
-      // TODO: Call API to sync stores from ShipStation
-      // const response = await apiClient.post('/shipstation/sync-stores');
-      // setStores(response.data.stores);
-      setError('ShipStation sync not implemented yet. Configure in Settings after connecting.');
-    } catch {
-      setError('Failed to sync stores from ShipStation.');
+      const response = await apiClient.post('/shipstation/sync-stores');
+      if (response.data.stores) {
+        setStores(response.data.stores.map((store: { id: number; storeName: string; marketplaceName?: string; isActive: boolean }) => ({
+          id: store.id,
+          name: store.storeName,
+          marketplace: store.marketplaceName || 'Unknown',
+          isActive: store.isActive
+        })));
+      }
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } } };
+      setError(error.response?.data?.message || 'Failed to sync stores from ShipStation.');
     } finally {
       setIsSyncing(false);
     }
