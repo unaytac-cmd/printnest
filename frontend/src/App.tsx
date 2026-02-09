@@ -10,9 +10,7 @@ import { lazy, Suspense } from 'react';
 
 // Page components (lazy loaded)
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
-const Products = lazy(() => import('@/pages/Products'));
 const Orders = lazy(() => import('@/pages/Orders'));
-const Customers = lazy(() => import('@/pages/Customers'));
 const Analytics = lazy(() => import('@/pages/Analytics'));
 const DesignStudio = lazy(() => import('@/pages/DesignStudio'));
 const Catalog = lazy(() => import('@/pages/Catalog'));
@@ -27,7 +25,6 @@ const Onboarding = lazy(() => import('@/pages/Onboarding'));
 // New feature pages
 const Gangsheet = lazy(() => import('@/pages/Gangsheet'));
 const Mapping = lazy(() => import('@/pages/Mapping'));
-const Categories = lazy(() => import('@/pages/Categories'));
 
 // Super Admin pages
 const SuperAdminLayout = lazy(() => import('@/pages/superadmin/SuperAdminLayout'));

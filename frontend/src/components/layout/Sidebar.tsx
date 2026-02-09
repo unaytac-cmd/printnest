@@ -2,9 +2,7 @@ import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
-  Package,
   ShoppingCart,
-  Users,
   BarChart3,
   Settings,
   HelpCircle,
@@ -13,12 +11,9 @@ import {
   Store,
   Palette,
   Truck,
-  CreditCard,
-  Bell,
   LogOut,
   Layers,
   Link2,
-  FolderTree,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTenantBranding } from '@/hooks/useTenant';
