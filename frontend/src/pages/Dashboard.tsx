@@ -1,7 +1,9 @@
-import { BarChart3, DollarSign, Package, ShoppingCart, TrendingUp, TrendingDown, Users, Loader2 } from 'lucide-react';
+import { BarChart3, DollarSign, Package, ShoppingCart, TrendingUp, TrendingDown, Users, Loader2, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDashboard } from '@/api/hooks/useDashboard';
 import { useTenant } from '@/stores/tenantStore';
+import { useState, useEffect } from 'react';
+import apiClient from '@/api/client';
 
 interface StatCardProps {
   title: string;
@@ -91,27 +93,85 @@ function RecentOrder({ customer, product, amount, status }: RecentOrderProps) {
   );
 }
 
-function EmptyState() {
+function EmptyState({ isShipStationConnected, onSyncOrders, isSyncing }: {
+  isShipStationConnected: boolean;
+  onSyncOrders: () => void;
+  isSyncing: boolean;
+}) {
+  if (!isShipStationConnected) {
+    return (
+      <div className="text-center py-12">
+        <Package className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
+        <h3 className="text-lg font-semibold mb-2">No orders yet</h3>
+        <p className="text-muted-foreground mb-6">
+          Start by connecting your ShipStation account to import orders.
+        </p>
+        <a
+          href="/settings/shipstation"
+          className="inline-block px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+        >
+          Connect ShipStation
+        </a>
+      </div>
+    );
+  }
+
   return (
     <div className="text-center py-12">
       <Package className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
       <h3 className="text-lg font-semibold mb-2">No orders yet</h3>
       <p className="text-muted-foreground mb-6">
-        Start by connecting your ShipStation account to import orders.
+        ShipStation is connected. Sync your orders to get started.
       </p>
-      <a
-        href="/settings/integrations"
-        className="inline-block px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+      <button
+        onClick={onSyncOrders}
+        disabled={isSyncing}
+        className="inline-flex items-center gap-2 px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
       >
-        Connect ShipStation
-      </a>
+        <RefreshCw className={cn("w-4 h-4", isSyncing && "animate-spin")} />
+        {isSyncing ? 'Syncing...' : 'Sync Orders'}
+      </button>
     </div>
   );
 }
 
 export default function Dashboard() {
-  const { data, isLoading } = useDashboard();
+  const { data, isLoading, refetch } = useDashboard();
   const tenant = useTenant();
+  const [isShipStationConnected, setIsShipStationConnected] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isCheckingConnection, setIsCheckingConnection] = useState(true);
+
+  // Check if ShipStation is connected
+  useEffect(() => {
+    const checkConnection = async () => {
+      try {
+        const response = await apiClient.get('/settings');
+        const settings = response.data;
+        const connected = settings.shipstationSettings?.isConnected ||
+          (settings.shipstationSettings?.apiKey && settings.shipstationSettings?.apiSecret);
+        setIsShipStationConnected(!!connected);
+      } catch (err) {
+        console.error('Failed to check ShipStation connection:', err);
+      } finally {
+        setIsCheckingConnection(false);
+      }
+    };
+    checkConnection();
+  }, []);
+
+  const handleSyncOrders = async () => {
+    setIsSyncing(true);
+    try {
+      await apiClient.post('/shipstation/sync-orders');
+      // Refetch dashboard data after sync
+      refetch();
+    } catch (err) {
+      console.error('Failed to sync orders:', err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -189,7 +249,7 @@ export default function Dashboard() {
             </a>
           </div>
 
-          {isLoading ? (
+          {isLoading || isCheckingConnection ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
@@ -207,7 +267,11 @@ export default function Dashboard() {
               ))}
             </div>
           ) : (
-            <EmptyState />
+            <EmptyState
+              isShipStationConnected={isShipStationConnected}
+              onSyncOrders={handleSyncOrders}
+              isSyncing={isSyncing}
+            />
           )}
         </div>
 
@@ -215,20 +279,21 @@ export default function Dashboard() {
         <div className="bg-card rounded-xl border border-border p-6">
           <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
           <div className="space-y-3">
-            <a
-              href="/settings/integrations"
-              className="flex items-center gap-3 p-3 rounded-lg bg-primary/5 hover:bg-primary/10 transition-colors"
+            <button
+              onClick={handleSyncOrders}
+              disabled={isSyncing || !isShipStationConnected}
+              className="w-full flex items-center gap-3 p-3 rounded-lg bg-primary/5 hover:bg-primary/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-left"
             >
               <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <ShoppingCart className="w-5 h-5 text-primary" />
+                <RefreshCw className={cn("w-5 h-5 text-primary", isSyncing && "animate-spin")} />
               </div>
               <div>
-                <p className="font-medium">Sync Orders</p>
+                <p className="font-medium">{isSyncing ? 'Syncing...' : 'Sync Orders'}</p>
                 <p className="text-sm text-muted-foreground">
-                  Import from ShipStation
+                  {isShipStationConnected ? 'Import from ShipStation' : 'Connect ShipStation first'}
                 </p>
               </div>
-            </a>
+            </button>
             <a
               href="/gangsheet"
               className="flex items-center gap-3 p-3 rounded-lg bg-primary/5 hover:bg-primary/10 transition-colors"

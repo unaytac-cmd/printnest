@@ -780,9 +780,7 @@ function AwsSettings() {
 
 function ShippingSettingsPage() {
   const [nestshipperApiKey, setNestshipperApiKey] = useState('');
-  const [easypostApiKey, setEasypostApiKey] = useState('');
   const [showNestshipperKey, setShowNestshipperKey] = useState(false);
-  const [showEasypostKey, setShowEasypostKey] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -793,7 +791,6 @@ function ShippingSettingsPage() {
         const settings = response.data;
         if (settings.shippingSettings) {
           setNestshipperApiKey(settings.shippingSettings.nestshipperApiKey || '');
-          setEasypostApiKey(settings.shippingSettings.easypostApiKey || '');
         }
       } catch (err) {
         console.error('Failed to fetch settings:', err);
@@ -810,7 +807,6 @@ function ShippingSettingsPage() {
       await apiClient.put('/settings', {
         shippingSettings: {
           nestshipperApiKey: nestshipperApiKey || null,
-          easypostApiKey: easypostApiKey || null,
         },
       });
     } catch (err) {
@@ -833,59 +829,33 @@ function ShippingSettingsPage() {
       <div>
         <h2 className="text-lg font-semibold">Shipping Settings</h2>
         <p className="text-sm text-muted-foreground">
-          Configure your shipping label providers
+          Configure your shipping label provider
         </p>
       </div>
 
-      <div className="space-y-6">
-        {/* NestShipper */}
-        <div className="space-y-4">
-          <h3 className="font-medium">NestShipper</h3>
-          <div>
-            <label className="block text-sm font-medium mb-1">API Key</label>
-            <div className="relative">
-              <input
-                type={showNestshipperKey ? 'text' : 'password'}
-                value={nestshipperApiKey}
-                onChange={(e) => setNestshipperApiKey(e.target.value)}
-                placeholder="Enter your NestShipper API Key"
-                className="w-full px-3 py-2 pr-10 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring font-mono text-sm"
-              />
-              <button
-                type="button"
-                onClick={() => setShowNestshipperKey(!showNestshipperKey)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                {showNestshipperKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
+      <div className="space-y-4">
+        <h3 className="font-medium">NestShipper</h3>
+        <div>
+          <label className="block text-sm font-medium mb-1">API Key</label>
+          <div className="relative">
+            <input
+              type={showNestshipperKey ? 'text' : 'password'}
+              value={nestshipperApiKey}
+              onChange={(e) => setNestshipperApiKey(e.target.value)}
+              placeholder="Enter your NestShipper API Key"
+              className="w-full px-3 py-2 pr-10 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring font-mono text-sm"
+            />
+            <button
+              type="button"
+              onClick={() => setShowNestshipperKey(!showNestshipperKey)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              {showNestshipperKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
           </div>
-        </div>
-
-        <div className="border-t border-border" />
-
-        {/* EasyPost */}
-        <div className="space-y-4">
-          <h3 className="font-medium">EasyPost</h3>
-          <div>
-            <label className="block text-sm font-medium mb-1">API Key</label>
-            <div className="relative">
-              <input
-                type={showEasypostKey ? 'text' : 'password'}
-                value={easypostApiKey}
-                onChange={(e) => setEasypostApiKey(e.target.value)}
-                placeholder="Enter your EasyPost API Key"
-                className="w-full px-3 py-2 pr-10 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring font-mono text-sm"
-              />
-              <button
-                type="button"
-                onClick={() => setShowEasypostKey(!showEasypostKey)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                {showEasypostKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            Get your API key from your NestShipper dashboard
+          </p>
         </div>
       </div>
 
