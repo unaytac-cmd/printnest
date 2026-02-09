@@ -57,9 +57,12 @@ export function useTenantFromSubdomain() {
   const { setTenant, setLoading, setError, tenant, isLoading, error } = useTenantStore();
 
   const slug = getTenantSlug();
-  // Treat IP addresses as development mode (before domain setup)
-  const isIPAddress = /^(\d{1,3}\.){3}\d{1,3}$/.test(window.location.hostname);
+  // Treat IP addresses and nip.io as development mode (before domain setup)
+  const isIPAddress = /^(\d{1,3}\.){3}\d{1,3}(\.nip\.io)?$/.test(window.location.hostname);
   const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || isIPAddress;
+
+  // If tenant is already in store (from login/register), use it
+  const hasTenantInStore = !!tenant && !!tenant.id;
 
   const {
     data,
@@ -69,6 +72,10 @@ export function useTenantFromSubdomain() {
   } = useQuery({
     queryKey: ['tenant', slug],
     queryFn: async () => {
+      // If tenant already in store, return it
+      if (hasTenantInStore) {
+        return tenant;
+      }
       // In development without slug, use mock tenant
       if (isDevelopment && !slug) {
         return DEV_TENANT;
@@ -79,7 +86,7 @@ export function useTenantFromSubdomain() {
       const response = await api.get<TenantLookupResponse>(`/tenants/lookup/${slug}`);
       return response.data.tenant;
     },
-    enabled: isDevelopment || !!slug,
+    enabled: !hasTenantInStore && (isDevelopment || !!slug),
     staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
     retry: (failureCount, error) => {
       // Don't retry for 404 errors (tenant not found)
@@ -115,11 +122,11 @@ export function useTenantFromSubdomain() {
 
   return {
     tenant,
-    slug: slug || (isDevelopment ? 'localhost' : null),
-    isLoading: isLoading || queryLoading,
-    error,
+    slug: slug || tenant?.slug || (isDevelopment ? 'localhost' : null),
+    isLoading: hasTenantInStore ? false : (isLoading || queryLoading),
+    error: hasTenantInStore ? null : error,
     refreshTenant,
-    isValid: isDevelopment || (!!tenant && tenant.status === 'active'),
+    isValid: hasTenantInStore || isDevelopment || (!!tenant && tenant.status === 'active'),
   };
 }
 
