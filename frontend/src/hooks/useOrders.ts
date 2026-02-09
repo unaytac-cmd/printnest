@@ -59,13 +59,17 @@ export function useOrders(filters: OrderFilters = {}) {
 
       const response = await api.get<OrderListResponse>('/orders', params);
 
+      // Backend returns data directly (not wrapped in { data: ... })
+      // api.get returns res.data, so response IS the OrderListResponse
+      const data = response as unknown as OrderListResponse;
+
       // Transform to standard paginated format
       return {
-        data: response.data.orders,
-        total: response.data.total,
-        page: response.data.page,
-        pageSize: response.data.limit,
-        totalPages: response.data.totalPages,
+        data: data.orders,
+        total: data.total,
+        page: data.page,
+        pageSize: data.limit,
+        totalPages: data.totalPages,
       };
     },
     staleTime: 30 * 1000, // 30 seconds
