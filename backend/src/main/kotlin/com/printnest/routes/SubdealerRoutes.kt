@@ -223,10 +223,10 @@ fun Route.subdealerRoutes() {
 
             result.fold(
                 onSuccess = { stores ->
-                    call.respond(HttpStatusCode.OK, mapOf(
-                        "success" to true,
-                        "message" to "Assigned ${stores.size} stores",
-                        "stores" to stores.map { store ->
+                    call.respond(HttpStatusCode.OK, AssignStoresResponse(
+                        success = true,
+                        message = "Assigned ${stores.size} stores",
+                        stores = stores.map { store ->
                             StoreInfo(
                                 id = store.id,
                                 shipstationStoreId = store.shipstationStoreId,
@@ -314,6 +314,13 @@ data class SubdealerResponse(
     val assignedStores: List<StoreInfo>,
     val createdAt: String,
     val updatedAt: String
+)
+
+@Serializable
+data class AssignStoresResponse(
+    val success: Boolean,
+    val message: String,
+    val stores: List<StoreInfo>
 )
 
 // Extension function to convert Subdealer to Response
