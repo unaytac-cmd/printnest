@@ -100,11 +100,14 @@ export default function Register() {
           slug: response.tenant.subdomain,
           customDomain: response.tenant.customDomain || undefined,
           status: response.tenant.status === 1 ? 'active' : 'suspended',
+          onboardingCompleted: false,
           createdAt: response.tenant.createdAt || new Date().toISOString(),
           updatedAt: response.tenant.createdAt || new Date().toISOString(),
         });
 
-        navigate('/onboarding', { replace: true });
+        // Tenant and user are already created, go directly to dashboard
+        // Onboarding settings can be configured later in Settings
+        navigate('/dashboard', { replace: true });
       } catch (err: unknown) {
         const error = err as { response?: { data?: { error?: string } } };
         setError(error.response?.data?.error || 'Registration failed. Please try again.');
