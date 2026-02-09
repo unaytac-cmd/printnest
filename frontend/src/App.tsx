@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { useAuthStore, useIsAuthenticated, useAuthLoading } from '@/stores/authStore';
+import { useTenantStore } from '@/stores/tenantStore';
 import { useTenantFromSubdomain } from '@/hooks/useTenant';
 
 // Lazy load pages for better performance
@@ -70,12 +71,17 @@ function GuestRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useIsAuthenticated();
   const isLoading = useAuthLoading();
   const location = useLocation();
+  const tenant = useTenantStore((state) => state.tenant);
 
   if (isLoading) {
     return <PageLoader />;
   }
 
   if (isAuthenticated) {
+    // Check if onboarding is completed
+    if (tenant && tenant.onboardingCompleted === false) {
+      return <Navigate to="/onboarding" replace />;
+    }
     const from = location.state?.from?.pathname || '/dashboard';
     return <Navigate to={from} replace />;
   }
