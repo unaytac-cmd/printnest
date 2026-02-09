@@ -1001,6 +1001,25 @@ function SubdealersSettings() {
     }
   };
 
+  // Get store IDs that are assigned to OTHER subdealers (not the current one)
+  const getAssignedToOtherSubdealers = (currentSubdealerId: number): Set<number> => {
+    const assignedIds = new Set<number>();
+    subdealers.forEach(s => {
+      if (s.id !== currentSubdealerId) {
+        s.assignedStores.forEach(store => assignedIds.add(store.id));
+      }
+    });
+    return assignedIds;
+  };
+
+  // Get available stores for a subdealer (excluding stores assigned to others)
+  const getAvailableStores = (subdealer: Subdealer): ShipStationStore[] => {
+    const assignedToOthers = getAssignedToOtherSubdealers(subdealer.id);
+    return allStores.filter(store =>
+      !assignedToOthers.has(store.id) || subdealer.assignedStores.some(s => s.id === store.id)
+    );
+  };
+
   const openStoreModal = (subdealer: Subdealer) => {
     setSelectedSubdealer(subdealer);
     setSelectedStoreIds(subdealer.assignedStores.map(s => s.id));
@@ -1253,12 +1272,18 @@ function SubdealersSettings() {
             <h3 className="text-lg font-semibold">Assign Stores to {selectedSubdealer.fullName}</h3>
 
             <div className="space-y-2 max-h-64 overflow-y-auto">
-              {allStores.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4 text-center">
-                  No stores available. Sync stores from ShipStation first.
-                </p>
-              ) : (
-                allStores.map((store) => (
+              {(() => {
+                const availableStores = getAvailableStores(selectedSubdealer);
+                if (availableStores.length === 0) {
+                  return (
+                    <p className="text-sm text-muted-foreground py-4 text-center">
+                      {allStores.length === 0
+                        ? 'No stores available. Sync stores from ShipStation first.'
+                        : 'All stores are assigned to other sub-dealers.'}
+                    </p>
+                  );
+                }
+                return availableStores.map((store) => (
                   <label
                     key={store.id}
                     className="flex items-center gap-3 p-3 border border-border rounded-lg cursor-pointer hover:bg-muted/50"
@@ -1274,8 +1299,8 @@ function SubdealersSettings() {
                       <p className="text-xs text-muted-foreground">{store.marketplaceName}</p>
                     </div>
                   </label>
-                ))
-              )}
+                ));
+              })()}
             </div>
 
             <div className="flex justify-end gap-3 pt-4 border-t border-border">
