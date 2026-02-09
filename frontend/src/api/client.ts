@@ -55,6 +55,12 @@ apiClient.interceptors.request.use(
       config.headers['X-Tenant-Slug'] = tenant.slug;
     }
 
+    // Add user ID header if available
+    const user = useAuthStore.getState().user;
+    if (user?.id) {
+      config.headers['X-User-Id'] = user.id;
+    }
+
     return config;
   },
   (error) => {

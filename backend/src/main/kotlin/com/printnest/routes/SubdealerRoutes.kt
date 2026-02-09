@@ -23,9 +23,9 @@ fun Route.subdealerRoutes() {
          * List all subdealers for the current producer
          */
         get {
-            // TODO: Get from JWT claims
-            val tenantId = call.parameters["tenantId"]?.toLongOrNull() ?: 1L
-            val producerId = call.parameters["producerId"]?.toLongOrNull()
+            val tenantId = call.request.headers["X-Tenant-Id"]?.toLongOrNull()
+                ?: return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Tenant ID required"))
+            val producerId = call.request.queryParameters["producerId"]?.toLongOrNull()
 
             val subdealers = if (producerId != null) {
                 subdealerService.getSubdealersByProducer(producerId)
@@ -41,8 +41,9 @@ fun Route.subdealerRoutes() {
          * Create a new subdealer
          */
         post {
-            val tenantId = call.parameters["tenantId"]?.toLongOrNull() ?: 1L
-            val producerId = call.parameters["producerId"]?.toLongOrNull() ?: 1L // TODO: Get from JWT
+            val tenantId = call.request.headers["X-Tenant-Id"]?.toLongOrNull()
+                ?: return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Tenant ID required"))
+            val producerId = call.request.headers["X-User-Id"]?.toLongOrNull() ?: 1L
 
             val request = call.receive<CreateSubdealerRequest>()
 
@@ -209,7 +210,8 @@ fun Route.subdealerRoutes() {
          * Assign stores to a subdealer (replaces existing assignments)
          */
         post("/{id}/stores") {
-            val tenantId = call.parameters["tenantId"]?.toLongOrNull() ?: 1L
+            val tenantId = call.request.headers["X-Tenant-Id"]?.toLongOrNull()
+                ?: return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Tenant ID required"))
             val id = call.parameters["id"]?.toLongOrNull()
             if (id == null) {
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse("invalid_id", "Invalid subdealer ID"))
@@ -291,7 +293,8 @@ fun Route.subdealerRoutes() {
          * Get count of active subdealers
          */
         get("/count") {
-            val tenantId = call.parameters["tenantId"]?.toLongOrNull() ?: 1L
+            val tenantId = call.request.headers["X-Tenant-Id"]?.toLongOrNull()
+                ?: return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Tenant ID required"))
             val count = subdealerService.countSubdealers(tenantId)
             call.respond(HttpStatusCode.OK, mapOf("count" to count))
         }

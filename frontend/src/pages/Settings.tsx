@@ -920,10 +920,15 @@ interface Subdealer {
 
 function SubdealersSettings() {
   const [subdealers, setSubdealers] = useState<Subdealer[]>([]);
-
-  // TODO: Fetch subdealers from API using useEffect
+  const [allStores, setAllStores] = useState<ShipStationStore[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isCreating, setIsCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showStoreModal, setShowStoreModal] = useState(false);
+  const [selectedSubdealer, setSelectedSubdealer] = useState<Subdealer | null>(null);
+  const [selectedStoreIds, setSelectedStoreIds] = useState<number[]>([]);
   const [newSubdealer, setNewSubdealer] = useState({
     email: '',
     password: '',
@@ -931,35 +936,111 @@ function SubdealersSettings() {
     lastName: '',
   });
 
-  const handleCreateSubdealer = async () => {
-    // TODO: Call API to create subdealer
-    const created: Subdealer = {
-      id: subdealers.length + 1,
-      email: newSubdealer.email,
-      firstName: newSubdealer.firstName || null,
-      lastName: newSubdealer.lastName || null,
-      fullName: `${newSubdealer.firstName} ${newSubdealer.lastName}`.trim() || newSubdealer.email,
-      status: 1,
-      totalCredit: '0.00',
-      assignedStores: [],
-      createdAt: new Date().toISOString().split('T')[0],
+  // Fetch subdealers and stores on mount
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [subdealersRes, storesRes] = await Promise.all([
+          apiClient.get('/subdealers'),
+          apiClient.get('/shipstation/stores?includeInactive=true')
+        ]);
+        setSubdealers(subdealersRes.data || []);
+        setAllStores(storesRes.data || []);
+      } catch (err) {
+        console.error('Failed to fetch data:', err);
+        setError('Failed to load subdealers');
+      } finally {
+        setIsLoading(false);
+      }
     };
-    setSubdealers([...subdealers, created]);
-    setShowCreateModal(false);
-    setNewSubdealer({ email: '', password: '', firstName: '', lastName: '' });
+    fetchData();
+  }, []);
+
+  const handleCreateSubdealer = async () => {
+    setIsCreating(true);
+    setError(null);
+    try {
+      const response = await apiClient.post('/subdealers', {
+        email: newSubdealer.email,
+        password: newSubdealer.password,
+        firstName: newSubdealer.firstName || null,
+        lastName: newSubdealer.lastName || null,
+      });
+      setSubdealers([...subdealers, response.data]);
+      setShowCreateModal(false);
+      setNewSubdealer({ email: '', password: '', firstName: '', lastName: '' });
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } } };
+      setError(error.response?.data?.message || 'Failed to create subdealer');
+    } finally {
+      setIsCreating(false);
+    }
   };
 
-  const handleDeactivate = (id: number) => {
-    setSubdealers(subdealers.map(s =>
-      s.id === id ? { ...s, status: 0 } : s
-    ));
+  const handleDeactivate = async (id: number) => {
+    try {
+      await apiClient.delete(`/subdealers/${id}`);
+      setSubdealers(subdealers.map(s =>
+        s.id === id ? { ...s, status: 0 } : s
+      ));
+    } catch (err) {
+      console.error('Failed to deactivate subdealer:', err);
+    }
   };
 
-  const handleActivate = (id: number) => {
-    setSubdealers(subdealers.map(s =>
-      s.id === id ? { ...s, status: 1 } : s
-    ));
+  const handleActivate = async (id: number) => {
+    try {
+      await apiClient.post(`/subdealers/${id}/activate`);
+      setSubdealers(subdealers.map(s =>
+        s.id === id ? { ...s, status: 1 } : s
+      ));
+    } catch (err) {
+      console.error('Failed to activate subdealer:', err);
+    }
   };
+
+  const openStoreModal = (subdealer: Subdealer) => {
+    setSelectedSubdealer(subdealer);
+    setSelectedStoreIds(subdealer.assignedStores.map(s => s.id));
+    setShowStoreModal(true);
+  };
+
+  const handleAssignStores = async () => {
+    if (!selectedSubdealer) return;
+
+    try {
+      const response = await apiClient.post(`/subdealers/${selectedSubdealer.id}/stores`, {
+        storeIds: selectedStoreIds
+      });
+
+      // Update the subdealer in the list with new stores
+      setSubdealers(subdealers.map(s =>
+        s.id === selectedSubdealer.id
+          ? { ...s, assignedStores: response.data.stores || [] }
+          : s
+      ));
+      setShowStoreModal(false);
+      setSelectedSubdealer(null);
+    } catch (err) {
+      console.error('Failed to assign stores:', err);
+    }
+  };
+
+  const toggleStoreSelection = (storeId: number) => {
+    setSelectedStoreIds(prev =>
+      prev.includes(storeId)
+        ? prev.filter(id => id !== storeId)
+        : [...prev, storeId]
+    );
+  };
+
+  if (isLoading) {
+    return (
+      <div className="bg-card border border-border rounded-xl p-6 flex items-center justify-center h-64">
+        <RefreshCw className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -1056,6 +1137,7 @@ function SubdealersSettings() {
                 <td className="px-6 py-4 whitespace-nowrap text-right">
                   <div className="flex items-center justify-end gap-2">
                     <button
+                      onClick={() => openStoreModal(subdealer)}
                       className="p-2 hover:bg-muted rounded-lg transition-colors"
                       title="Manage stores"
                     >
@@ -1137,6 +1219,12 @@ function SubdealersSettings() {
               </div>
             </div>
 
+            {error && (
+              <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm">
+                {error}
+              </div>
+            )}
+
             <div className="flex justify-end gap-3 pt-4">
               <button
                 onClick={() => setShowCreateModal(false)}
@@ -1146,10 +1234,63 @@ function SubdealersSettings() {
               </button>
               <button
                 onClick={handleCreateSubdealer}
-                disabled={!newSubdealer.email || !newSubdealer.password}
+                disabled={!newSubdealer.email || !newSubdealer.password || isCreating}
                 className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
               >
-                Create
+                {isCreating ? 'Creating...' : 'Create'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Store Assignment Modal */}
+      {showStoreModal && selectedSubdealer && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-card border border-border rounded-xl p-6 w-full max-w-md space-y-4">
+            <h3 className="text-lg font-semibold">Assign Stores to {selectedSubdealer.fullName}</h3>
+
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {allStores.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">
+                  No stores available. Sync stores from ShipStation first.
+                </p>
+              ) : (
+                allStores.map((store) => (
+                  <label
+                    key={store.id}
+                    className="flex items-center gap-3 p-3 border border-border rounded-lg cursor-pointer hover:bg-muted/50"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedStoreIds.includes(store.id)}
+                      onChange={() => toggleStoreSelection(store.id)}
+                      className="w-4 h-4 rounded border-border"
+                    />
+                    <div className="flex-1">
+                      <p className="font-medium">{store.storeName}</p>
+                      <p className="text-xs text-muted-foreground">{store.marketplaceName}</p>
+                    </div>
+                  </label>
+                ))
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-border">
+              <button
+                onClick={() => {
+                  setShowStoreModal(false);
+                  setSelectedSubdealer(null);
+                }}
+                className="px-4 py-2 border border-border rounded-lg hover:bg-muted transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAssignStores}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+              >
+                Save ({selectedStoreIds.length} stores)
               </button>
             </div>
           </div>
