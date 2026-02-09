@@ -970,8 +970,10 @@ function SubdealersSettings() {
       setShowCreateModal(false);
       setNewSubdealer({ email: '', password: '', firstName: '', lastName: '' });
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { message?: string } } };
-      setError(error.response?.data?.message || 'Failed to create subdealer');
+      const error = err as { response?: { data?: { message?: string; error?: string } } };
+      const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Failed to create subdealer';
+      console.error('Create subdealer error:', error.response?.data);
+      setError(errorMessage);
     } finally {
       setIsCreating(false);
     }
@@ -1054,7 +1056,7 @@ function SubdealersSettings() {
             </p>
           </div>
           <button
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => { setError(null); setShowCreateModal(true); }}
             className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
