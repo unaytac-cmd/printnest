@@ -15,6 +15,7 @@ export interface Tenant {
   customDomain?: string;
   settings?: TenantSettings;
   status: 'active' | 'suspended' | 'pending';
+  onboardingCompleted?: boolean;
   createdAt: string;
   updatedAt: string;
 }

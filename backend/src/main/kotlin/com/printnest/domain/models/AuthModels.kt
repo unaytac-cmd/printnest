@@ -116,6 +116,7 @@ data class TenantResponse(
     val subdomain: String,
     val customDomain: String?,
     val status: Int,
+    val onboardingCompleted: Boolean = false,
     val createdAt: String
 )
 
@@ -155,6 +156,7 @@ data class AuthTenant(
     val customDomain: String?,
     val stripeCustomerId: String?,
     val settings: String,
+    val onboardingCompleted: Boolean = false,
     val createdAt: String,
     val updatedAt: String
 )

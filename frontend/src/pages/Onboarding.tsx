@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
+import { useTenantStore } from '@/stores/tenantStore';
 import apiClient from '@/api/client';
 
 interface OnboardingData {
@@ -223,6 +224,9 @@ export default function Onboarding() {
         accessToken,
         refreshToken
       );
+
+      // Mark onboarding as complete in tenant store
+      useTenantStore.getState().updateTenant({ onboardingCompleted: true });
 
       navigate('/dashboard');
     } catch (error: any) {
