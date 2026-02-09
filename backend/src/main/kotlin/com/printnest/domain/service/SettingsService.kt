@@ -49,14 +49,16 @@ class SettingsService(
                 val settingsJson = row.getOrNull(Tenants.settings) ?: "{}"
                 val storedSettings = try {
                     if (settingsJson.isNotEmpty() && settingsJson != "{}") {
-                        json.decodeFromString<GangsheetSettings>(settingsJson)
+                        json.decodeFromString<TenantSettings>(settingsJson)
                     } else null
                 } catch (e: Exception) {
+                    // Log the error for debugging
+                    println("Error parsing settings JSON: ${e.message}")
                     null
                 }
 
-                // Convert storage model to service model
-                val gangsheetSettings = storedSettings?.let { gs ->
+                // Convert gangsheet settings from storage model to service model
+                val gangsheetSettings = storedSettings?.gangsheet?.let { gs ->
                     GangsheetSettingsFull(
                         rollWidth = gs.width,
                         rollLength = gs.height,
@@ -74,6 +76,10 @@ class SettingsService(
                     name = row[Tenants.name],
                     customDomain = row[Tenants.customDomain],
                     gangsheetSettings = gangsheetSettings,
+                    awsSettings = storedSettings?.aws,
+                    shipstationSettings = storedSettings?.shipstation,
+                    stripeSettings = storedSettings?.stripe,
+                    shippingSettings = storedSettings?.shipping,
                     status = row[Tenants.status],
                     createdAt = row[Tenants.createdAt].toString(),
                     updatedAt = row[Tenants.updatedAt].toString()
