@@ -14,7 +14,6 @@ import {
   ExternalLink,
   Globe,
   Layers,
-  Info,
   Package,
   Cloud,
 } from 'lucide-react';
@@ -421,37 +420,6 @@ export default function Onboarding() {
                   Only lowercase letters, numbers, and hyphens
                 </p>
               </div>
-
-              {/* Custom domain */}
-              <div className="border-t border-border pt-6">
-                <label className="block text-sm font-medium mb-1">
-                  Custom Domain <span className="text-muted-foreground">(optional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={apiConfig.customDomain}
-                  onChange={(e) => setApiConfig({ ...apiConfig, customDomain: e.target.value })}
-                  placeholder="store.yourdomain.com"
-                  className="w-full px-4 py-2 border border-border rounded-lg bg-background"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  You can set this up later in settings
-                </p>
-              </div>
-
-              {apiConfig.customDomain && (
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                  <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
-                    <Info className="w-4 h-4" />
-                    DNS Configuration
-                  </h4>
-                  <div className="bg-background rounded p-3 font-mono text-xs space-y-1">
-                    <p>Type: CNAME</p>
-                    <p>Name: {apiConfig.customDomain.split('.')[0] || 'store'}</p>
-                    <p>Value: proxy.printnest.com</p>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         );

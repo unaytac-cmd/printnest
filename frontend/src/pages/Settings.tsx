@@ -87,7 +87,6 @@ function SettingsLayout({ children }: { children: React.ReactNode }) {
 function StoreSettings() {
   const [storeName, setStoreName] = useState('');
   const [subdomain, setSubdomain] = useState('');
-  const [customDomain, setCustomDomain] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -98,7 +97,6 @@ function StoreSettings() {
         const settings = response.data;
         setStoreName(settings.name || '');
         setSubdomain(settings.subdomain || '');
-        setCustomDomain(settings.customDomain || '');
       } catch (err) {
         console.error('Failed to fetch settings:', err);
       } finally {
@@ -113,7 +111,6 @@ function StoreSettings() {
     try {
       await apiClient.put('/settings', {
         name: storeName,
-        customDomain: customDomain || null,
       });
     } catch (err) {
       console.error('Failed to save settings:', err);
@@ -159,17 +156,6 @@ function StoreSettings() {
             <span className="text-muted-foreground">.printnest.com</span>
           </div>
           <p className="text-xs text-muted-foreground mt-1">Subdomain cannot be changed after registration</p>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">Custom Domain (optional)</label>
-          <input
-            type="text"
-            value={customDomain}
-            onChange={(e) => setCustomDomain(e.target.value)}
-            placeholder="store.yourdomain.com"
-            className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-          />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
