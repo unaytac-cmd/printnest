@@ -5,6 +5,7 @@ import com.printnest.domain.repository.OrderRepository
 import com.printnest.domain.repository.ShipStationStoreRepository
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
@@ -186,7 +187,7 @@ class ShipStationService(
                                 put("name", item.name)
                                 item.options?.let { opts ->
                                     putJsonArray("options") {
-                                        opts.forEach { opt -> add("${opt.name}: ${opt.value}") }
+                                        opts.forEach { opt -> add(JsonPrimitive("${opt.name}: ${opt.value}")) }
                                     }
                                 }
                                 item.weight?.value?.let { put("weight", it) }
