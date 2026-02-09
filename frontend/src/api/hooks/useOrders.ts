@@ -1,17 +1,25 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, PaginatedResponse } from '@/api/client';
+import { api } from '@/api/client';
 import { queryKeys } from '@/api/queryKeys';
-import type { Order, OrderStatus } from '@/types';
+import type { ApiOrder } from '@/types';
 
-// Filter types
+// Backend response type
+interface OrderListResponse {
+  orders: ApiOrder[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+// Filter types - matches backend OrderFiltersExtended
 export interface OrderFilters {
   page?: number;
-  pageSize?: number;
-  status?: OrderStatus | OrderStatus[];
-  storeId?: string;
+  pageSize?: number;  // mapped to limit on backend
+  status?: number;    // integer status code
+  statuses?: number[];
+  storeId?: number;
   search?: string;
-  startDate?: string;
-  endDate?: string;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
 }
@@ -59,14 +67,14 @@ interface CreateOrderData {
 }
 
 interface UpdateOrderStatusData {
-  id: string;
-  status: OrderStatus;
+  id: number;
+  status: number;
 }
 
 interface BulkOrderActionData {
-  orderIds: string[];
+  orderIds: number[];
   action: 'update_status' | 'export' | 'create_gangsheet' | 'cancel';
-  status?: OrderStatus;
+  status?: number;
 }
 
 /**
@@ -76,13 +84,37 @@ export function useOrders(filters: OrderFilters = {}) {
   return useQuery({
     queryKey: queryKeys.orders.list(filters),
     queryFn: async () => {
-      const response = await api.get<PaginatedResponse<Order>>('/orders', {
-        ...filters,
-        status: Array.isArray(filters.status)
-          ? filters.status.join(',')
-          : filters.status,
-      });
-      return response.data;
+      // Map frontend params to backend params
+      const params: Record<string, unknown> = {
+        page: filters.page || 1,
+        limit: filters.pageSize || 20,
+        sortBy: filters.sortBy || 'createdAt',
+        sortOrder: filters.sortOrder?.toUpperCase() || 'DESC',
+      };
+
+      if (filters.status !== undefined) {
+        params.status = filters.status;
+      }
+      if (filters.statuses && filters.statuses.length > 0) {
+        params.statuses = filters.statuses.join(',');
+      }
+      if (filters.storeId) {
+        params.storeId = filters.storeId;
+      }
+      if (filters.search) {
+        params.search = filters.search;
+      }
+
+      const response = await api.get<OrderListResponse>('/orders', params);
+
+      // Transform to standard paginated format
+      return {
+        data: response.data.orders,
+        total: response.data.total,
+        page: response.data.page,
+        pageSize: response.data.limit,
+        totalPages: response.data.totalPages,
+      };
     },
     staleTime: 30 * 1000, // 30 seconds
   });
@@ -91,11 +123,11 @@ export function useOrders(filters: OrderFilters = {}) {
 /**
  * Hook to fetch a single order by ID
  */
-export function useOrder(id: string) {
+export function useOrder(id: string | number) {
   return useQuery({
-    queryKey: queryKeys.orders.detail(id),
+    queryKey: queryKeys.orders.detail(String(id)),
     queryFn: async () => {
-      const response = await api.get<Order>(`/orders/${id}`);
+      const response = await api.get<ApiOrder>(`/orders/${id}?withProducts=true`);
       return response.data;
     },
     enabled: !!id,
@@ -110,12 +142,12 @@ export function useCreateOrder() {
 
   return useMutation({
     mutationFn: async (data: CreateOrderData) => {
-      const response = await api.post<Order>('/orders', data);
+      const response = await api.post<ApiOrder>('/orders', data);
       return response.data;
     },
     onSuccess: (newOrder) => {
       // Add to cache
-      queryClient.setQueryData(queryKeys.orders.detail(newOrder.id), newOrder);
+      queryClient.setQueryData(queryKeys.orders.detail(String(newOrder.id)), newOrder);
       // Invalidate list to refetch
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.all });
       // Invalidate analytics as order counts changed
@@ -132,13 +164,13 @@ export function useUpdateOrderStatus() {
 
   return useMutation({
     mutationFn: async ({ id, status }: UpdateOrderStatusData) => {
-      const response = await api.patch<Order>(`/orders/${id}/status`, { status });
+      const response = await api.patch<ApiOrder>(`/orders/${id}/status`, { status });
       return response.data;
     },
     onSuccess: (updatedOrder) => {
       // Update the specific order in cache
       queryClient.setQueryData(
-        queryKeys.orders.detail(updatedOrder.id),
+        queryKeys.orders.detail(String(updatedOrder.id)),
         updatedOrder
       );
       // Invalidate orders list
@@ -183,14 +215,14 @@ export function useCancelOrder() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id: string) => {
-      const response = await api.post<Order>(`/orders/${id}/cancel`);
+    mutationFn: async (id: number) => {
+      const response = await api.post<ApiOrder>(`/orders/${id}/cancel`);
       return response.data;
     },
     onSuccess: (cancelledOrder) => {
       // Update the specific order in cache
       queryClient.setQueryData(
-        queryKeys.orders.detail(cancelledOrder.id),
+        queryKeys.orders.detail(String(cancelledOrder.id)),
         cancelledOrder
       );
       // Invalidate orders list
@@ -206,7 +238,7 @@ export function useCancelOrder() {
  */
 export function useExportOrders() {
   return useMutation({
-    mutationFn: async (orderIds: string[]) => {
+    mutationFn: async (orderIds: number[]) => {
       const response = await api.post<{ downloadUrl: string }>(
         '/orders/export',
         { orderIds }
@@ -219,9 +251,9 @@ export function useExportOrders() {
 /**
  * Hook to get order fulfillment details
  */
-export function useOrderFulfillment(orderId: string) {
+export function useOrderFulfillment(orderId: string | number) {
   return useQuery({
-    queryKey: queryKeys.orders.fulfillment(orderId),
+    queryKey: queryKeys.orders.fulfillment(String(orderId)),
     queryFn: async () => {
       const response = await api.get<{
         status: string;

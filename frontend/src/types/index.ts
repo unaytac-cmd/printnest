@@ -108,7 +108,7 @@ export interface Category {
   parentId?: string;
 }
 
-// Order types
+// Order types (legacy - used by existing components)
 export interface Order {
   id: string;
   orderNumber: string;
@@ -139,6 +139,118 @@ export interface OrderItem {
   quantity: number;
   price: number;
   total: number;
+}
+
+// =====================================================
+// API Order types - matches backend OrderFull
+// =====================================================
+
+export interface ApiOrder {
+  id: number;
+  tenantId: number;
+  userId: number;
+  storeId?: number;
+  intOrderId?: string;
+  externalOrderId?: string;
+  orderType: number;
+  orderStatus: number;
+  orderMapStatus: number;
+  orderInfo?: ApiOrderInfo;
+  totalAmount: string;
+  shippingAmount: string;
+  taxAmount: string;
+  urgentAmount?: string;
+  giftNote?: string;
+  customerEmail?: string;
+  customerName?: string;
+  shippingAddress?: Address;
+  billingAddress?: Address;
+  trackingNumber?: string;
+  trackingUrl?: string;
+  paymentMethod?: string;
+  shipstationStoreId?: number;
+  shipstationOrderId?: number;
+  shippedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  products?: ApiOrderProduct[];
+}
+
+export interface ApiOrderInfo {
+  toAddress?: Address;
+  orderNote?: string;
+  giftNote?: string;
+}
+
+export interface ApiOrderProduct {
+  id: number;
+  orderId: number;
+  productId?: number;
+  variantId?: number;
+  productTitle: string;
+  quantity: number;
+  price: string;
+  designUrl?: string;
+  sku?: string;
+  status: number;
+}
+
+// Order status codes from backend
+export const OrderStatusCodes = {
+  COMBINED: -4,
+  COMPLETED: -3,
+  INVALID_ADDRESS: -2,
+  DELETED: -1,
+  NEW_ORDER: 0,
+  CANCELLED: 2,
+  PAYMENT_PENDING: 4,
+  EDITING: 8,
+  PENDING: 12,
+  URGENT: 14,
+  AWAITING_RESPONSE: 15,
+  IN_PRODUCTION: 16,
+  SHIPPED: 20,
+} as const;
+
+export type OrderStatusCode = typeof OrderStatusCodes[keyof typeof OrderStatusCodes];
+
+// Helper to convert status code to string
+export function getOrderStatusLabel(code: number): string {
+  switch (code) {
+    case OrderStatusCodes.COMBINED: return 'Combined';
+    case OrderStatusCodes.COMPLETED: return 'Completed';
+    case OrderStatusCodes.INVALID_ADDRESS: return 'Invalid Address';
+    case OrderStatusCodes.DELETED: return 'Deleted';
+    case OrderStatusCodes.NEW_ORDER: return 'New';
+    case OrderStatusCodes.CANCELLED: return 'Cancelled';
+    case OrderStatusCodes.PAYMENT_PENDING: return 'Payment Pending';
+    case OrderStatusCodes.EDITING: return 'Editing';
+    case OrderStatusCodes.PENDING: return 'Pending';
+    case OrderStatusCodes.URGENT: return 'Urgent';
+    case OrderStatusCodes.AWAITING_RESPONSE: return 'Awaiting Response';
+    case OrderStatusCodes.IN_PRODUCTION: return 'In Production';
+    case OrderStatusCodes.SHIPPED: return 'Shipped';
+    default: return 'Unknown';
+  }
+}
+
+export function getOrderStatusColor(code: number): string {
+  switch (code) {
+    case OrderStatusCodes.COMPLETED:
+    case OrderStatusCodes.SHIPPED:
+      return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
+    case OrderStatusCodes.CANCELLED:
+    case OrderStatusCodes.DELETED:
+    case OrderStatusCodes.INVALID_ADDRESS:
+      return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
+    case OrderStatusCodes.PENDING:
+    case OrderStatusCodes.URGENT:
+      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400';
+    case OrderStatusCodes.IN_PRODUCTION:
+      return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400';
+    default:
+      return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400';
+  }
 }
 
 // Customer types

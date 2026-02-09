@@ -1,22 +1,31 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { queryKeys } from '@/api/queryKeys';
-import type { Order, PaginatedResponse, OrderStatus } from '@/types';
+import type { ApiOrder } from '@/types';
+
+// Backend response type
+interface OrderListResponse {
+  orders: ApiOrder[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
 
 interface OrderFilters {
   page?: number;
   pageSize?: number;
-  status?: OrderStatus;
+  status?: number;
+  statuses?: number[];
+  storeId?: number;
   search?: string;
-  startDate?: string;
-  endDate?: string;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
 }
 
 interface UpdateOrderData {
-  id: string;
-  status?: OrderStatus;
+  id: number;
+  status?: number;
   notes?: string;
 }
 
@@ -27,20 +36,50 @@ export function useOrders(filters: OrderFilters = {}) {
   return useQuery({
     queryKey: queryKeys.orders.list(filters),
     queryFn: async () => {
-      const response = await api.get<PaginatedResponse<Order>>('/orders', filters);
-      return response.data;
+      // Map frontend params to backend params
+      const params: Record<string, unknown> = {
+        page: filters.page || 1,
+        limit: filters.pageSize || 20,
+        sortBy: filters.sortBy || 'createdAt',
+        sortOrder: filters.sortOrder?.toUpperCase() || 'DESC',
+      };
+
+      if (filters.status !== undefined) {
+        params.status = filters.status;
+      }
+      if (filters.statuses && filters.statuses.length > 0) {
+        params.statuses = filters.statuses.join(',');
+      }
+      if (filters.storeId) {
+        params.storeId = filters.storeId;
+      }
+      if (filters.search) {
+        params.search = filters.search;
+      }
+
+      const response = await api.get<OrderListResponse>('/orders', params);
+
+      // Transform to standard paginated format
+      return {
+        data: response.data.orders,
+        total: response.data.total,
+        page: response.data.page,
+        pageSize: response.data.limit,
+        totalPages: response.data.totalPages,
+      };
     },
+    staleTime: 30 * 1000, // 30 seconds
   });
 }
 
 /**
  * Hook to fetch a single order by ID
  */
-export function useOrder(id: string) {
+export function useOrder(id: string | number) {
   return useQuery({
-    queryKey: queryKeys.orders.detail(id),
+    queryKey: queryKeys.orders.detail(String(id)),
     queryFn: async () => {
-      const response = await api.get<Order>(`/orders/${id}`);
+      const response = await api.get<ApiOrder>(`/orders/${id}?withProducts=true`);
       return response.data;
     },
     enabled: !!id,
@@ -55,14 +94,14 @@ export function useUpdateOrder() {
 
   return useMutation({
     mutationFn: async ({ id, ...data }: UpdateOrderData) => {
-      const response = await api.patch<Order>(`/orders/${id}`, data);
+      const response = await api.patch<ApiOrder>(`/orders/${id}`, data);
       return response.data;
     },
     onSuccess: (data) => {
       // Update the specific order in cache
-      queryClient.setQueryData(queryKeys.orders.detail(data.id), data);
+      queryClient.setQueryData(queryKeys.orders.detail(String(data.id)), data);
       // Invalidate orders list
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.all });
     },
   });
 }
@@ -74,15 +113,15 @@ export function useCancelOrder() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id: string) => {
-      const response = await api.post<Order>(`/orders/${id}/cancel`);
+    mutationFn: async (id: number) => {
+      const response = await api.post<ApiOrder>(`/orders/${id}/cancel`);
       return response.data;
     },
     onSuccess: (data) => {
       // Update the specific order in cache
-      queryClient.setQueryData(queryKeys.orders.detail(data.id), data);
+      queryClient.setQueryData(queryKeys.orders.detail(String(data.id)), data);
       // Invalidate orders list
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.all });
     },
   });
 }
@@ -90,9 +129,9 @@ export function useCancelOrder() {
 /**
  * Hook to get order fulfillment details
  */
-export function useOrderFulfillment(orderId: string) {
+export function useOrderFulfillment(orderId: string | number) {
   return useQuery({
-    queryKey: queryKeys.orders.fulfillment(orderId),
+    queryKey: queryKeys.orders.fulfillment(String(orderId)),
     queryFn: async () => {
       const response = await api.get(`/orders/${orderId}/fulfillment`);
       return response.data;
