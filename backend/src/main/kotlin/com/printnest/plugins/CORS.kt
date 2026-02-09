@@ -58,6 +58,7 @@ fun Application.configureCORS() {
         allowHeader("X-Tenant-ID")
         allowHeader("X-Tenant-Id")
         allowHeader("X-Tenant-Slug")
+        allowHeader("X-User-Id")
         allowHeader("X-Request-ID")
         allowHeader("X-Api-Key")
 
