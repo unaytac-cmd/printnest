@@ -779,8 +779,8 @@ function AwsSettings() {
 // =====================================================
 
 function ShippingSettingsPage() {
-  const [nestshipperApiKey, setNestshipperApiKey] = useState('');
-  const [showNestshipperKey, setShowNestshipperKey] = useState(false);
+  const [nestshipperClientId, setNestshipperClientId] = useState('');
+  const [showClientId, setShowClientId] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -790,7 +790,7 @@ function ShippingSettingsPage() {
         const response = await apiClient.get('/settings');
         const settings = response.data;
         if (settings.shippingSettings) {
-          setNestshipperApiKey(settings.shippingSettings.nestshipperApiKey || '');
+          setNestshipperClientId(settings.shippingSettings.nestshipperClientId || '');
         }
       } catch (err) {
         console.error('Failed to fetch settings:', err);
@@ -806,7 +806,7 @@ function ShippingSettingsPage() {
     try {
       await apiClient.put('/settings', {
         shippingSettings: {
-          nestshipperApiKey: nestshipperApiKey || null,
+          nestshipperClientId: nestshipperClientId || null,
         },
       });
     } catch (err) {
@@ -836,25 +836,25 @@ function ShippingSettingsPage() {
       <div className="space-y-4">
         <h3 className="font-medium">NestShipper</h3>
         <div>
-          <label className="block text-sm font-medium mb-1">API Key</label>
+          <label className="block text-sm font-medium mb-1">Client ID</label>
           <div className="relative">
             <input
-              type={showNestshipperKey ? 'text' : 'password'}
-              value={nestshipperApiKey}
-              onChange={(e) => setNestshipperApiKey(e.target.value)}
-              placeholder="Enter your NestShipper API Key"
+              type={showClientId ? 'text' : 'password'}
+              value={nestshipperClientId}
+              onChange={(e) => setNestshipperClientId(e.target.value)}
+              placeholder="Enter your NestShipper Client ID"
               className="w-full px-3 py-2 pr-10 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring font-mono text-sm"
             />
             <button
               type="button"
-              onClick={() => setShowNestshipperKey(!showNestshipperKey)}
+              onClick={() => setShowClientId(!showClientId)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             >
-              {showNestshipperKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              {showClientId ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           </div>
           <p className="text-xs text-muted-foreground mt-2">
-            Get your API key from your NestShipper dashboard
+            Get your Client ID from your NestShipper dashboard
           </p>
         </div>
       </div>

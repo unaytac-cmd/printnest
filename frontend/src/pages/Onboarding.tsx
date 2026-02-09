@@ -43,7 +43,6 @@ interface ApiConfig {
   shipstationApiSecret: string;
 
   // Shipping
-  nestshipperApiKey: string;
   nestshipperClientId: string;
 
   // AWS S3 Storage
@@ -92,7 +91,6 @@ export default function Onboarding() {
     shipstationApiSecret: '',
 
     // Shipping
-    nestshipperApiKey: '',
     nestshipperClientId: '',
 
     // AWS S3 Storage
@@ -184,8 +182,8 @@ export default function Onboarding() {
       case 'payment':
         return !!(apiConfig.stripeSecretKey.trim() && apiConfig.stripePublishableKey.trim());
       case 'shipping':
-        // NestShipper requires both API Key and Client ID
-        return !!(apiConfig.nestshipperApiKey.trim() && apiConfig.nestshipperClientId.trim());
+        // NestShipper requires only Client ID
+        return !!apiConfig.nestshipperClientId.trim();
       case 'storage':
         return !!(
           apiConfig.awsAccessKeyId.trim() &&
@@ -228,7 +226,6 @@ export default function Onboarding() {
         webhookSecret: apiConfig.stripeWebhookSecret || null,
       },
       shippingSettings: {
-        nestshipperApiKey: apiConfig.nestshipperApiKey || null,
         nestshipperClientId: apiConfig.nestshipperClientId || null,
       },
       awsSettings: {
@@ -278,7 +275,6 @@ export default function Onboarding() {
           stripePublishableKey: apiConfig.stripePublishableKey,
           stripeWebhookSecret: apiConfig.stripeWebhookSecret || null,
           // Shipping
-          nestshipperApiKey: apiConfig.nestshipperApiKey || null,
           nestshipperClientId: apiConfig.nestshipperClientId || null,
           // AWS S3
           awsAccessKeyId: apiConfig.awsAccessKeyId,
@@ -613,49 +609,25 @@ export default function Onboarding() {
                 <Truck className="w-4 h-4 text-primary" />
                 NestShipper
               </h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Client ID <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showSecrets['nestshipperClientId'] ? 'text' : 'password'}
-                      value={apiConfig.nestshipperClientId}
-                      onChange={(e) => setApiConfig({ ...apiConfig, nestshipperClientId: e.target.value })}
-                      placeholder="Enter your NestShipper Client ID"
-                      className="w-full px-4 py-2 pr-10 border border-border rounded-lg bg-background"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => toggleSecret('nestshipperClientId')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                    >
-                      {showSecrets['nestshipperClientId'] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    API Key <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showSecrets['nestshipperApiKey'] ? 'text' : 'password'}
-                      value={apiConfig.nestshipperApiKey}
-                      onChange={(e) => setApiConfig({ ...apiConfig, nestshipperApiKey: e.target.value })}
-                      placeholder="Enter your NestShipper API Key"
-                      className="w-full px-4 py-2 pr-10 border border-border rounded-lg bg-background"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => toggleSecret('nestshipperApiKey')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                    >
-                      {showSecrets['nestshipperApiKey'] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Client ID <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showSecrets['nestshipperClientId'] ? 'text' : 'password'}
+                    value={apiConfig.nestshipperClientId}
+                    onChange={(e) => setApiConfig({ ...apiConfig, nestshipperClientId: e.target.value })}
+                    placeholder="Enter your NestShipper Client ID"
+                    className="w-full px-4 py-2 pr-10 border border-border rounded-lg bg-background"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => toggleSecret('nestshipperClientId')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  >
+                    {showSecrets['nestshipperClientId'] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
               </div>
             </div>
