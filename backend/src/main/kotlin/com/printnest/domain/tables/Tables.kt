@@ -20,7 +20,7 @@ object Tenants : LongIdTable("tenants") {
     val status = integer("status").default(0)
     val customDomain = varchar("custom_domain", 255).nullable()
     val stripeCustomerId = varchar("stripe_customer_id", 255).nullable()
-    val settings = jsonb<String>("settings", jsonSerializer).default("{}")
+    val settings = text("settings").default("{}")
     val createdAt = timestamp("created_at").clientDefault { Instant.now() }
     val updatedAt = timestamp("updated_at").clientDefault { Instant.now() }
 }
