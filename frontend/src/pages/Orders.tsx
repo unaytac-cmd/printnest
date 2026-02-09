@@ -1,17 +1,21 @@
 import { useState } from 'react';
 import { Routes, Route, Link } from 'react-router-dom';
-import { Search, Package, CheckCircle, Clock, XCircle, Loader2, Plus, Truck, AlertCircle, Edit2 } from 'lucide-react';
+import { Search, Package, CheckCircle, Clock, XCircle, Loader2, Plus, Truck, AlertCircle, Edit2, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useOrders } from '@/hooks/useOrders';
 import { useIsSubdealer, useAssignedStoreIds } from '@/stores/authStore';
 import { OrderStatusCodes, getOrderStatusLabel, getOrderStatusColor } from '@/types';
+import { useQueryClient } from '@tanstack/react-query';
+import apiClient from '@/api/client';
 import NewOrder from './orders/NewOrder';
 
 function OrdersList() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<number | 'all'>('all');
   const [page, setPage] = useState(1);
+  const [isSyncing, setIsSyncing] = useState(false);
   const pageSize = 20;
+  const queryClient = useQueryClient();
 
   const isSubdealer = useIsSubdealer();
   const assignedStoreIds = useAssignedStoreIds();
@@ -19,6 +23,27 @@ function OrdersList() {
   // For subdealers, filter by their first assigned store (backend should handle multiple)
   // TODO: Backend should filter by user's assigned stores automatically
   const storeFilter = isSubdealer && assignedStoreIds.length > 0 ? assignedStoreIds[0] : undefined;
+
+  const handleSyncOrders = async () => {
+    setIsSyncing(true);
+    try {
+      if (isSubdealer && assignedStoreIds.length > 0) {
+        // Sync each assigned store for subdealers
+        for (const storeId of assignedStoreIds) {
+          await apiClient.post('/shipstation/sync-orders', { storeId });
+        }
+      } else {
+        // Producer: sync all stores
+        await apiClient.post('/shipstation/sync-orders', {});
+      }
+      // Refetch orders after sync
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+    } catch (err) {
+      console.error('Failed to sync orders:', err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const { data, isLoading, error } = useOrders({
     page,
@@ -94,13 +119,23 @@ function OrdersList() {
           <h1 className="text-2xl font-bold">Orders</h1>
           <p className="text-muted-foreground">Manage and track customer orders</p>
         </div>
-        <Link
-          to="/orders/new"
-          className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          New Order
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleSyncOrders}
+            disabled={isSyncing}
+            className="inline-flex items-center gap-2 px-4 py-2 border border-border rounded-lg hover:bg-muted transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={cn("w-4 h-4", isSyncing && "animate-spin")} />
+            {isSyncing ? 'Syncing...' : 'Sync Orders'}
+          </button>
+          <Link
+            to="/orders/new"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            New Order
+          </Link>
+        </div>
       </div>
 
       {/* Status Tabs */}
