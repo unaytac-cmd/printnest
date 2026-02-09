@@ -57,7 +57,9 @@ export function useTenantFromSubdomain() {
   const { setTenant, setLoading, setError, tenant, isLoading, error } = useTenantStore();
 
   const slug = getTenantSlug();
-  const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  // Treat IP addresses as development mode (before domain setup)
+  const isIPAddress = /^(\d{1,3}\.){3}\d{1,3}$/.test(window.location.hostname);
+  const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || isIPAddress;
 
   const {
     data,
