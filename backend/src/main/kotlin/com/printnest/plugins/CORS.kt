@@ -23,6 +23,9 @@ fun Application.configureCORS() {
             // Allow IP-based access (before domain setup)
             System.getenv("SERVER_IP")?.let { ip ->
                 allowHost(ip, schemes = listOf("http", "https"))
+                // Also allow nip.io subdomain
+                allowHost("$ip.nip.io", schemes = listOf("http", "https"))
+                allowHost("*.$ip.nip.io", schemes = listOf("http", "https"))
             }
         } else {
             // Development only
