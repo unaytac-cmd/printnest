@@ -558,18 +558,19 @@ class GangsheetService(
             val url = if (roll.imageData != null) {
                 try {
                     s3Service.uploadBytes(
+                        tenantId = tenantId,
                         bytes = roll.imageData,
                         key = key,
                         contentType = "image/png"
                     )
                     rollFiles.add(fileName to roll.imageData)
-                    s3Service.getPublicUrl(key)
+                    s3Service.getPublicUrl(tenantId, key) ?: ""
                 } catch (e: Exception) {
                     logger.error("Failed to upload roll ${roll.rollNumber} to S3", e)
-                    s3Service.getPublicUrl(key) // Return placeholder URL
+                    s3Service.getPublicUrl(tenantId, key) ?: "" // Return placeholder URL
                 }
             } else {
-                s3Service.getPublicUrl(key)
+                s3Service.getPublicUrl(tenantId, key) ?: ""
             }
 
             // Create roll in database
@@ -591,17 +592,18 @@ class GangsheetService(
             try {
                 val zipData = imageProcessor.createZipArchive(rollFiles, name)
                 s3Service.uploadBytes(
+                    tenantId = tenantId,
                     bytes = zipData,
                     key = zipKey,
                     contentType = "application/zip"
                 )
-                s3Service.getPublicUrl(zipKey)
+                s3Service.getPublicUrl(tenantId, zipKey) ?: ""
             } catch (e: Exception) {
                 logger.error("Failed to create/upload ZIP archive", e)
-                s3Service.getPublicUrl(zipKey)
+                s3Service.getPublicUrl(tenantId, zipKey) ?: ""
             }
         } else {
-            s3Service.getPublicUrl(zipKey)
+            s3Service.getPublicUrl(tenantId, zipKey) ?: ""
         }
 
         logger.info("Uploaded gangsheet $gangsheetId: ${rolls.size} rolls, ZIP at $downloadUrl")

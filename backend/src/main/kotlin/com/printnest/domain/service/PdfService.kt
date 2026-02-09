@@ -70,7 +70,7 @@ class PdfService(
             val fileName = "packing-slip-${order.intOrderId ?: orderId}.pdf"
             val key = "$PDF_PREFIX/$tenantId/packing-slips/$fileId/$fileName"
 
-            val fileUrl = uploadPdfToS3(pdfBytes, key, fileName)
+            val fileUrl = uploadPdfToS3(tenantId, pdfBytes, key, fileName)
 
             Result.success(PdfGenerationResponse(
                 success = true,
@@ -135,7 +135,7 @@ class PdfService(
                     }
 
                     val key = "$PDF_PREFIX/$tenantId/packing-slips/$fileId/$fileName"
-                    val fileUrl = uploadPdfToS3(pdfBytes, key, fileName)
+                    val fileUrl = uploadPdfToS3(tenantId, pdfBytes, key, fileName)
 
                     generatedFiles.add(PdfFileInfo(
                         orderId = order.id,
@@ -156,7 +156,7 @@ class PdfService(
                 val zipFileId = UUID.randomUUID().toString()
                 val zipFileName = "packing-slips-${System.currentTimeMillis()}.zip"
                 val zipKey = "$PDF_PREFIX/$tenantId/packing-slips/$zipFileId/$zipFileName"
-                zipFileUrl = uploadPdfToS3(zipBytes, zipKey, zipFileName)
+                zipFileUrl = uploadPdfToS3(tenantId, zipBytes, zipKey, zipFileName)
             }
 
             Result.success(BulkPdfGenerationResponse(
@@ -202,7 +202,7 @@ class PdfService(
             val fileName = "invoice-${invoiceData.invoiceNumber}.pdf"
             val key = "$PDF_PREFIX/$tenantId/invoices/$fileId/$fileName"
 
-            val fileUrl = uploadPdfToS3(pdfBytes, key, fileName)
+            val fileUrl = uploadPdfToS3(tenantId, pdfBytes, key, fileName)
 
             Result.success(PdfGenerationResponse(
                 success = true,
@@ -243,7 +243,7 @@ class PdfService(
             val fileName = "label-${order.intOrderId ?: orderId}.pdf"
             val key = "$PDF_PREFIX/$tenantId/labels/$fileId/$fileName"
 
-            val fileUrl = uploadPdfToS3(pdfBytes, key, fileName)
+            val fileUrl = uploadPdfToS3(tenantId, pdfBytes, key, fileName)
 
             Result.success(PdfGenerationResponse(
                 success = true,
@@ -1285,8 +1285,8 @@ class PdfService(
         }
     }
 
-    private fun uploadPdfToS3(pdfBytes: ByteArray, key: String, fileName: String): String {
-        return s3Service.uploadBytes(pdfBytes, key, "application/pdf", fileName)
+    private fun uploadPdfToS3(tenantId: Long, pdfBytes: ByteArray, key: String, fileName: String): String? {
+        return s3Service.uploadBytes(tenantId, pdfBytes, key, "application/pdf", fileName)
     }
 
     private fun createZipFile(files: Map<String, ByteArray>): ByteArray {
@@ -1371,7 +1371,7 @@ class PdfService(
         // Search for file in S3 with the given fileId
         // This is a simplified version - in production you might want to store file metadata in DB
         return try {
-            val url = s3Service.generateDownloadUrl("$key/packing-slips/$fileId", 3600)
+            val url = s3Service.generateDownloadUrl(tenantId, "$key/packing-slips/$fileId", 3600)
             PdfDownloadInfo(
                 fileId = fileId,
                 fileName = "document.pdf",

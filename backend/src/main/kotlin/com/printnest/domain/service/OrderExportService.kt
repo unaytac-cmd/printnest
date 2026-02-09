@@ -234,7 +234,7 @@ class OrderExportService(
                 val deferredDownloads = chunk.map { design ->
                     async(Dispatchers.IO) {
                         try {
-                            val bytes = downloadDesignFromS3(design.designUrl)
+                            val bytes = downloadDesignFromS3(tenantId, design.designUrl)
                             if (bytes != null) {
                                 val fileName = generateDesignFileName(design)
                                 Pair(fileName, bytes)
@@ -273,6 +273,7 @@ class OrderExportService(
             val zipKey = "$DESIGNS_PREFIX/$tenantId/$zipFileName"
 
             val zipUrl = s3Service.uploadBytes(
+                tenantId = tenantId,
                 bytes = zipBytes,
                 key = zipKey,
                 contentType = "application/zip",
@@ -280,7 +281,7 @@ class OrderExportService(
             )
 
             // Generate presigned download URL
-            val downloadUrl = s3Service.generateDownloadUrl(zipKey, 3600) // 1 hour expiry
+            val downloadUrl = s3Service.generateDownloadUrl(tenantId, zipKey, 3600) // 1 hour expiry
 
             // Record export history
             exportRepository.createExportHistory(
@@ -438,7 +439,7 @@ class OrderExportService(
 
             labelUrls.forEach { (orderId, labelUrl) ->
                 try {
-                    val labelBytes = downloadDesignFromS3(labelUrl)
+                    val labelBytes = downloadDesignFromS3(tenantId, labelUrl)
                     if (labelBytes != null) {
                         val extension = labelUrl.substringAfterLast(".").lowercase()
                             .takeIf { it in listOf("pdf", "png", "jpg", "jpeg") } ?: "pdf"
@@ -467,13 +468,14 @@ class OrderExportService(
             val zipKey = "exports/labels/$tenantId/$zipFileName"
 
             val zipUrl = s3Service.uploadBytes(
+                tenantId = tenantId,
                 bytes = zipBytes,
                 key = zipKey,
                 contentType = "application/zip",
                 fileName = zipFileName
             )
 
-            val downloadUrl = s3Service.generateDownloadUrl(zipKey, 3600)
+            val downloadUrl = s3Service.generateDownloadUrl(tenantId, zipKey, 3600)
 
             // Record export history
             exportRepository.createExportHistory(
@@ -521,12 +523,12 @@ class OrderExportService(
     // PRIVATE HELPER METHODS
     // =====================================================
 
-    private suspend fun downloadDesignFromS3(designUrl: String): ByteArray? = withContext(Dispatchers.IO) {
+    private suspend fun downloadDesignFromS3(tenantId: Long, designUrl: String): ByteArray? = withContext(Dispatchers.IO) {
         try {
             // Extract key from URL if it's an S3 URL
             val key = extractS3Key(designUrl)
             if (key != null) {
-                s3Service.downloadBytes(key)
+                s3Service.downloadBytes(tenantId, key)
             } else {
                 // If not an S3 key, try to download as URL
                 java.net.URI(designUrl).toURL().openStream().use { it.readBytes() }

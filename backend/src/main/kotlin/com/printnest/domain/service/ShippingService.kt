@@ -412,16 +412,17 @@ class ShippingService(
 
     /**
      * Get EasyPost API key for a tenant
+     * Prioritizes tenant-specific settings over environment variable
      */
     private fun getEasyPostApiKey(tenantId: Long): String? {
-        // First check environment variable (for shared key)
-        val envKey = System.getenv("EASYPOST_API_KEY")
-        if (!envKey.isNullOrBlank()) {
-            return envKey
+        // First check tenant-specific settings
+        val tenantKey = settingsRepository.getShippingSettings(tenantId)?.easypostApiKey
+        if (!tenantKey.isNullOrBlank()) {
+            return tenantKey
         }
 
-        // Then check tenant-specific settings
-        return settingsRepository.getShippingSettings(tenantId)?.easypostApiKey
+        // Fallback to environment variable (for platform-wide operations)
+        return System.getenv("EASYPOST_API_KEY")?.takeIf { it.isNotBlank() }
     }
 
     /**

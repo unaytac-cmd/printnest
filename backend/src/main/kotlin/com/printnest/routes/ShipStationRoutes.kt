@@ -1,6 +1,8 @@
 package com.printnest.routes
 
 import com.printnest.domain.models.ShipStationSettings
+import com.printnest.domain.models.UpdateTenantSettingsRequest
+import com.printnest.domain.service.SettingsService
 import com.printnest.integrations.shipstation.ShipStationService
 import io.ktor.http.*
 import io.ktor.server.request.*
@@ -11,6 +13,7 @@ import org.koin.core.context.GlobalContext
 
 fun Route.shipStationRoutes() {
     val shipStationService: ShipStationService = GlobalContext.get().get()
+    val settingsService: SettingsService = GlobalContext.get().get()
 
     route("/shipstation") {
 
@@ -19,10 +22,10 @@ fun Route.shipStationRoutes() {
          * Connect ShipStation account with API credentials
          */
         post("/connect") {
-            val request = call.receive<ConnectShipStationRequest>()
+            val tenantId = call.request.headers["X-Tenant-Id"]?.toLongOrNull()
+                ?: return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Tenant ID required"))
 
-            // Get tenant ID from JWT claims (will be implemented with auth)
-            val tenantId = call.parameters["tenantId"]?.toLongOrNull() ?: 1L // TODO: Get from JWT
+            val request = call.receive<ConnectShipStationRequest>()
 
             // Validate credentials
             val isValid = shipStationService.validateCredentials(request.apiKey, request.apiSecret)
@@ -35,13 +38,27 @@ fun Route.shipStationRoutes() {
                 return@post
             }
 
-            // TODO: Save credentials to tenant settings (encrypted)
-            // For now, just return success
+            // Save credentials to tenant settings
+            val updateRequest = UpdateTenantSettingsRequest(
+                shipstationSettings = ShipStationSettings(
+                    apiKey = request.apiKey,
+                    apiSecret = request.apiSecret
+                )
+            )
 
-            call.respond(HttpStatusCode.OK, mapOf(
-                "success" to true,
-                "message" to "ShipStation connected successfully"
-            ))
+            settingsService.updateTenantSettings(tenantId, updateRequest)
+                .onSuccess {
+                    call.respond(HttpStatusCode.OK, mapOf(
+                        "success" to true,
+                        "message" to "ShipStation connected successfully"
+                    ))
+                }
+                .onFailure { error ->
+                    call.respond(HttpStatusCode.InternalServerError, mapOf(
+                        "error" to "Failed to save credentials",
+                        "message" to error.message
+                    ))
+                }
         }
 
         /**
@@ -49,14 +66,30 @@ fun Route.shipStationRoutes() {
          * Check ShipStation connection status
          */
         get("/status") {
-            val tenantId = call.parameters["tenantId"]?.toLongOrNull() ?: 1L // TODO: Get from JWT
+            val tenantId = call.request.headers["X-Tenant-Id"]?.toLongOrNull()
+                ?: return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Tenant ID required"))
 
-            // TODO: Get credentials from tenant settings
-            // For now, return mock status
+            // Get credentials from tenant settings
+            val settings = settingsService.getTenantSettings(tenantId)
+            val shipstationSettings = settings?.shipstationSettings
+
+            if (shipstationSettings?.apiKey.isNullOrBlank() || shipstationSettings?.apiSecret.isNullOrBlank()) {
+                call.respond(HttpStatusCode.OK, ShipStationStatusResponse(
+                    isConnected = false,
+                    lastSyncAt = null,
+                    storeCount = 0
+                ))
+                return@get
+            }
+
+            // Validate connection
+            val isValid = shipStationService.validateCredentials(shipstationSettings.apiKey!!, shipstationSettings.apiSecret!!)
+            val stores = if (isValid) shipStationService.getStores(tenantId) else emptyList()
+
             call.respond(HttpStatusCode.OK, ShipStationStatusResponse(
-                isConnected = false,
+                isConnected = isValid,
                 lastSyncAt = null,
-                storeCount = 0
+                storeCount = stores.size
             ))
         }
 
@@ -65,15 +98,25 @@ fun Route.shipStationRoutes() {
          * Sync stores from ShipStation
          */
         post("/sync-stores") {
-            val tenantId = call.parameters["tenantId"]?.toLongOrNull() ?: 1L // TODO: Get from JWT
+            val tenantId = call.request.headers["X-Tenant-Id"]?.toLongOrNull()
+                ?: return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Tenant ID required"))
 
-            // TODO: Get credentials from tenant settings
-            val request = call.receive<SyncStoresRequest>()
+            // Get credentials from tenant settings
+            val settings = settingsService.getTenantSettings(tenantId)
+            val shipstationSettings = settings?.shipstationSettings
+
+            if (shipstationSettings?.apiKey.isNullOrBlank() || shipstationSettings?.apiSecret.isNullOrBlank()) {
+                call.respond(HttpStatusCode.BadRequest, mapOf(
+                    "error" to "ShipStation not connected",
+                    "message" to "Please connect ShipStation first"
+                ))
+                return@post
+            }
 
             val result = shipStationService.syncStores(
                 tenantId = tenantId,
-                apiKey = request.apiKey,
-                apiSecret = request.apiSecret
+                apiKey = shipstationSettings.apiKey!!,
+                apiSecret = shipstationSettings.apiSecret!!
             )
 
             result.fold(
@@ -106,7 +149,8 @@ fun Route.shipStationRoutes() {
          * Get list of synced ShipStation stores
          */
         get("/stores") {
-            val tenantId = call.parameters["tenantId"]?.toLongOrNull() ?: 1L // TODO: Get from JWT
+            val tenantId = call.request.headers["X-Tenant-Id"]?.toLongOrNull()
+                ?: return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Tenant ID required"))
             val includeInactive = call.parameters["includeInactive"]?.toBoolean() ?: false
 
             val stores = if (includeInactive) {
@@ -162,10 +206,33 @@ fun Route.shipStationRoutes() {
 
             val request = call.receive<ShipStationSyncOrdersRequest>()
 
+            // Use credentials from request or fall back to tenant settings
+            val apiKey: String
+            val apiSecret: String
+
+            if (!request.apiKey.isNullOrBlank() && !request.apiSecret.isNullOrBlank()) {
+                apiKey = request.apiKey
+                apiSecret = request.apiSecret
+            } else {
+                val settings = settingsService.getTenantSettings(tenantId)
+                val shipstationSettings = settings?.shipstationSettings
+
+                if (shipstationSettings?.apiKey.isNullOrBlank() || shipstationSettings?.apiSecret.isNullOrBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf(
+                        "error" to "ShipStation not connected",
+                        "message" to "Please connect ShipStation first or provide API credentials"
+                    ))
+                    return@post
+                }
+
+                apiKey = shipstationSettings.apiKey!!
+                apiSecret = shipstationSettings.apiSecret!!
+            }
+
             val result = shipStationService.syncOrders(
                 tenantId = tenantId,
-                apiKey = request.apiKey,
-                apiSecret = request.apiSecret,
+                apiKey = apiKey,
+                apiSecret = apiSecret,
                 storeId = request.storeId,
                 modifyDateStart = request.modifyDateStart,
                 modifyDateEnd = request.modifyDateEnd
@@ -400,8 +467,8 @@ data class SyncStoresRequest(
 
 @Serializable
 data class ShipStationSyncOrdersRequest(
-    val apiKey: String,
-    val apiSecret: String,
+    val apiKey: String? = null,
+    val apiSecret: String? = null,
     val storeId: Long? = null,
     val modifyDateStart: String? = null,
     val modifyDateEnd: String? = null

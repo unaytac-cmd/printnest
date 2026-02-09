@@ -1,6 +1,8 @@
 package com.printnest.integrations.aws
 
-import io.ktor.server.application.*
+import com.printnest.domain.repository.SettingsRepository
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 import org.slf4j.LoggerFactory
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
@@ -11,53 +13,25 @@ import software.amazon.awssdk.services.s3.model.*
 import software.amazon.awssdk.services.s3.presigner.S3Presigner
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest
-import java.io.ByteArrayInputStream
 import java.security.MessageDigest
 import java.time.Duration
 import java.time.Instant
 import java.util.*
+import java.util.concurrent.ConcurrentHashMap
 
-class S3Service(
-    private val accessKeyId: String,
-    private val secretAccessKey: String,
-    private val region: String,
-    private val bucket: String,
-    private val cdnDomain: String? = null
-) {
+/**
+ * S3Service with per-tenant credentials
+ *
+ * Fetches AWS credentials from tenant settings in the database.
+ * Maintains a cache of S3 clients per tenant for performance.
+ */
+class S3Service : KoinComponent {
     private val logger = LoggerFactory.getLogger(S3Service::class.java)
+    private val settingsRepository: SettingsRepository by inject()
 
-    private val isConfigured: Boolean = accessKeyId.isNotBlank() && secretAccessKey.isNotBlank()
-
-    private val credentials by lazy {
-        if (!isConfigured) throw IllegalStateException("AWS credentials not configured")
-        AwsBasicCredentials.create(accessKeyId, secretAccessKey)
-    }
-
-    private val credentialsProvider by lazy {
-        StaticCredentialsProvider.create(credentials)
-    }
-
-    private val s3Client: S3Client by lazy {
-        S3Client.builder()
-            .region(Region.of(region))
-            .credentialsProvider(credentialsProvider)
-            .build()
-    }
-
-    private val presigner: S3Presigner by lazy {
-        S3Presigner.builder()
-            .region(Region.of(region))
-            .credentialsProvider(credentialsProvider)
-            .build()
-    }
-
-    init {
-        if (!isConfigured) {
-            logger.warn("S3Service initialized without AWS credentials - S3 operations will fail")
-        } else {
-            logger.info("S3Service initialized for bucket: $bucket in region: $region")
-        }
-    }
+    // Cache S3 clients per tenant to avoid recreating them on every call
+    private val clientCache = ConcurrentHashMap<Long, S3ClientWrapper>()
+    private val presignerCache = ConcurrentHashMap<Long, S3PresignerWrapper>()
 
     companion object {
         private const val DESIGN_PREFIX = "designs"
@@ -65,6 +39,144 @@ class S3Service(
         private const val TEMP_PREFIX = "temp"
         private const val EXPORTS_PREFIX = "exports"
         private const val DEFAULT_EXPIRATION_SECONDS = 3600L // 1 hour
+        private const val CLIENT_CACHE_TTL_MS = 300_000L // 5 minutes
+    }
+
+    // =====================================================
+    // CLIENT MANAGEMENT
+    // =====================================================
+
+    private data class S3ClientWrapper(
+        val client: S3Client,
+        val bucket: String,
+        val region: String,
+        val cdnDomain: String?,
+        val createdAt: Long = System.currentTimeMillis()
+    )
+
+    private data class S3PresignerWrapper(
+        val presigner: S3Presigner,
+        val createdAt: Long = System.currentTimeMillis()
+    )
+
+    /**
+     * Get or create S3 client for a tenant
+     */
+    private fun getS3Client(tenantId: Long): S3ClientWrapper? {
+        // Check cache first
+        val cached = clientCache[tenantId]
+        if (cached != null && System.currentTimeMillis() - cached.createdAt < CLIENT_CACHE_TTL_MS) {
+            return cached
+        }
+
+        // Fetch credentials from database
+        val settings = settingsRepository.getTenantSettings(tenantId)?.awsSettings
+        if (settings == null) {
+            logger.warn("No AWS settings configured for tenant $tenantId")
+            return null
+        }
+
+        val accessKeyId = settings.accessKeyId
+        val secretAccessKey = settings.secretAccessKey
+        val bucket = settings.s3Bucket
+
+        if (accessKeyId.isNullOrBlank() || secretAccessKey.isNullOrBlank() || bucket.isNullOrBlank()) {
+            logger.warn("Incomplete AWS credentials for tenant $tenantId")
+            return null
+        }
+
+        return try {
+            val credentials = AwsBasicCredentials.create(accessKeyId, secretAccessKey)
+            val credentialsProvider = StaticCredentialsProvider.create(credentials)
+            val region = settings.region
+
+            val client = S3Client.builder()
+                .region(Region.of(region))
+                .credentialsProvider(credentialsProvider)
+                .build()
+
+            val wrapper = S3ClientWrapper(
+                client = client,
+                bucket = bucket,
+                region = region,
+                cdnDomain = settings.cdnDomain
+            )
+
+            clientCache[tenantId] = wrapper
+            logger.info("Created S3 client for tenant $tenantId, bucket: $bucket, region: $region")
+            wrapper
+        } catch (e: Exception) {
+            logger.error("Failed to create S3 client for tenant $tenantId", e)
+            null
+        }
+    }
+
+    /**
+     * Get or create S3 presigner for a tenant
+     */
+    private fun getPresigner(tenantId: Long): S3Presigner? {
+        // Check cache first
+        val cached = presignerCache[tenantId]
+        if (cached != null && System.currentTimeMillis() - cached.createdAt < CLIENT_CACHE_TTL_MS) {
+            return cached.presigner
+        }
+
+        // Fetch credentials from database
+        val settings = settingsRepository.getTenantSettings(tenantId)?.awsSettings
+        if (settings == null) {
+            logger.warn("No AWS settings configured for tenant $tenantId")
+            return null
+        }
+
+        val accessKeyId = settings.accessKeyId
+        val secretAccessKey = settings.secretAccessKey
+
+        if (accessKeyId.isNullOrBlank() || secretAccessKey.isNullOrBlank()) {
+            logger.warn("Incomplete AWS credentials for tenant $tenantId")
+            return null
+        }
+
+        return try {
+            val credentials = AwsBasicCredentials.create(accessKeyId, secretAccessKey)
+            val credentialsProvider = StaticCredentialsProvider.create(credentials)
+            val region = settings.region
+
+            val presigner = S3Presigner.builder()
+                .region(Region.of(region))
+                .credentialsProvider(credentialsProvider)
+                .build()
+
+            presignerCache[tenantId] = S3PresignerWrapper(presigner)
+            presigner
+        } catch (e: Exception) {
+            logger.error("Failed to create S3 presigner for tenant $tenantId", e)
+            null
+        }
+    }
+
+    /**
+     * Check if S3 is configured for a tenant
+     */
+    fun isConfigured(tenantId: Long): Boolean {
+        val settings = settingsRepository.getTenantSettings(tenantId)?.awsSettings
+        return settings != null &&
+                !settings.accessKeyId.isNullOrBlank() &&
+                !settings.secretAccessKey.isNullOrBlank() &&
+                !settings.s3Bucket.isNullOrBlank()
+    }
+
+    /**
+     * Validate S3 credentials for a tenant
+     */
+    fun validateCredentials(tenantId: Long): Boolean {
+        val clientWrapper = getS3Client(tenantId) ?: return false
+        return try {
+            clientWrapper.client.listBuckets()
+            true
+        } catch (e: Exception) {
+            logger.error("S3 credential validation failed for tenant $tenantId", e)
+            false
+        }
     }
 
     // =====================================================
@@ -80,11 +192,14 @@ class S3Service(
         fileName: String,
         contentType: String,
         expirationSeconds: Long = DEFAULT_EXPIRATION_SECONDS
-    ): Pair<String, String> {
+    ): Pair<String, String>? {
+        val clientWrapper = getS3Client(tenantId) ?: return null
+        val presigner = getPresigner(tenantId) ?: return null
+
         val key = generateDesignKey(tenantId, userId, fileName)
 
         val putRequest = PutObjectRequest.builder()
-            .bucket(bucket)
+            .bucket(clientWrapper.bucket)
             .key(key)
             .contentType(contentType)
             .build()
@@ -96,7 +211,7 @@ class S3Service(
 
         val presignedUrl = presigner.presignPutObject(presignRequest)
 
-        logger.info("Generated upload URL for key: $key")
+        logger.info("Generated upload URL for tenant $tenantId, key: $key")
         return Pair(presignedUrl.url().toString(), key)
     }
 
@@ -104,16 +219,20 @@ class S3Service(
      * Generate a pre-signed URL for downloading/viewing a file
      */
     fun generateDownloadUrl(
+        tenantId: Long,
         key: String,
         expirationSeconds: Long = DEFAULT_EXPIRATION_SECONDS
-    ): String {
+    ): String? {
+        val clientWrapper = getS3Client(tenantId) ?: return null
+        val presigner = getPresigner(tenantId) ?: return null
+
         // If CDN is configured, use it directly
-        if (!cdnDomain.isNullOrBlank()) {
-            return "https://$cdnDomain/$key"
+        if (!clientWrapper.cdnDomain.isNullOrBlank()) {
+            return "https://${clientWrapper.cdnDomain}/$key"
         }
 
         val getRequest = GetObjectRequest.builder()
-            .bucket(bucket)
+            .bucket(clientWrapper.bucket)
             .key(key)
             .build()
 
@@ -133,11 +252,12 @@ class S3Service(
     /**
      * Check if a file exists in S3
      */
-    fun fileExists(key: String): Boolean {
+    fun fileExists(tenantId: Long, key: String): Boolean {
+        val clientWrapper = getS3Client(tenantId) ?: return false
         return try {
-            s3Client.headObject(
+            clientWrapper.client.headObject(
                 HeadObjectRequest.builder()
-                    .bucket(bucket)
+                    .bucket(clientWrapper.bucket)
                     .key(key)
                     .build()
             )
@@ -145,7 +265,7 @@ class S3Service(
         } catch (e: NoSuchKeyException) {
             false
         } catch (e: Exception) {
-            logger.error("Error checking file existence: $key", e)
+            logger.error("Error checking file existence for tenant $tenantId: $key", e)
             false
         }
     }
@@ -153,11 +273,12 @@ class S3Service(
     /**
      * Get file metadata from S3
      */
-    fun getFileMetadata(key: String): FileMetadata? {
+    fun getFileMetadata(tenantId: Long, key: String): FileMetadata? {
+        val clientWrapper = getS3Client(tenantId) ?: return null
         return try {
-            val response = s3Client.headObject(
+            val response = clientWrapper.client.headObject(
                 HeadObjectRequest.builder()
-                    .bucket(bucket)
+                    .bucket(clientWrapper.bucket)
                     .key(key)
                     .build()
             )
@@ -169,7 +290,7 @@ class S3Service(
                 eTag = response.eTag()
             )
         } catch (e: Exception) {
-            logger.error("Error getting file metadata: $key", e)
+            logger.error("Error getting file metadata for tenant $tenantId: $key", e)
             null
         }
     }
@@ -177,18 +298,19 @@ class S3Service(
     /**
      * Delete a file from S3
      */
-    fun deleteFile(key: String): Boolean {
+    fun deleteFile(tenantId: Long, key: String): Boolean {
+        val clientWrapper = getS3Client(tenantId) ?: return false
         return try {
-            s3Client.deleteObject(
+            clientWrapper.client.deleteObject(
                 DeleteObjectRequest.builder()
-                    .bucket(bucket)
+                    .bucket(clientWrapper.bucket)
                     .key(key)
                     .build()
             )
-            logger.info("Deleted file: $key")
+            logger.info("Deleted file for tenant $tenantId: $key")
             true
         } catch (e: Exception) {
-            logger.error("Error deleting file: $key", e)
+            logger.error("Error deleting file for tenant $tenantId: $key", e)
             false
         }
     }
@@ -196,8 +318,9 @@ class S3Service(
     /**
      * Delete multiple files from S3
      */
-    fun deleteFiles(keys: List<String>): Int {
+    fun deleteFiles(tenantId: Long, keys: List<String>): Int {
         if (keys.isEmpty()) return 0
+        val clientWrapper = getS3Client(tenantId) ?: return 0
 
         return try {
             val objects = keys.map { key ->
@@ -205,16 +328,16 @@ class S3Service(
             }
 
             val deleteRequest = DeleteObjectsRequest.builder()
-                .bucket(bucket)
+                .bucket(clientWrapper.bucket)
                 .delete(Delete.builder().objects(objects).build())
                 .build()
 
-            val result = s3Client.deleteObjects(deleteRequest)
+            val result = clientWrapper.client.deleteObjects(deleteRequest)
             val deletedCount = result.deleted().size
-            logger.info("Deleted $deletedCount files")
+            logger.info("Deleted $deletedCount files for tenant $tenantId")
             deletedCount
         } catch (e: Exception) {
-            logger.error("Error deleting files", e)
+            logger.error("Error deleting files for tenant $tenantId", e)
             0
         }
     }
@@ -222,41 +345,45 @@ class S3Service(
     /**
      * Copy a file within S3 (e.g., from temp to permanent location)
      */
-    fun copyFile(sourceKey: String, destinationKey: String): Boolean {
+    fun copyFile(tenantId: Long, sourceKey: String, destinationKey: String): Boolean {
+        val clientWrapper = getS3Client(tenantId) ?: return false
         return try {
-            s3Client.copyObject(
+            clientWrapper.client.copyObject(
                 CopyObjectRequest.builder()
-                    .sourceBucket(bucket)
+                    .sourceBucket(clientWrapper.bucket)
                     .sourceKey(sourceKey)
-                    .destinationBucket(bucket)
+                    .destinationBucket(clientWrapper.bucket)
                     .destinationKey(destinationKey)
                     .build()
             )
-            logger.info("Copied $sourceKey to $destinationKey")
+            logger.info("Copied $sourceKey to $destinationKey for tenant $tenantId")
             true
         } catch (e: Exception) {
-            logger.error("Error copying file: $sourceKey to $destinationKey", e)
+            logger.error("Error copying file for tenant $tenantId: $sourceKey to $destinationKey", e)
             false
         }
     }
 
     /**
      * Upload bytes directly to S3
+     * @param tenantId The tenant ID
      * @param bytes The byte array to upload
      * @param key The S3 key (path) for the file
      * @param contentType The MIME type of the file
      * @param fileName Optional filename for Content-Disposition header
-     * @return The public URL of the uploaded file
+     * @return The public URL of the uploaded file, or null if upload failed
      */
     fun uploadBytes(
+        tenantId: Long,
         bytes: ByteArray,
         key: String,
         contentType: String,
         fileName: String? = null
-    ): String {
+    ): String? {
+        val clientWrapper = getS3Client(tenantId) ?: return null
         return try {
             val requestBuilder = PutObjectRequest.builder()
-                .bucket(bucket)
+                .bucket(clientWrapper.bucket)
                 .key(key)
                 .contentType(contentType)
                 .contentLength(bytes.size.toLong())
@@ -266,58 +393,63 @@ class S3Service(
                 requestBuilder.contentDisposition("attachment; filename=\"$it\"")
             }
 
-            s3Client.putObject(
+            clientWrapper.client.putObject(
                 requestBuilder.build(),
                 RequestBody.fromBytes(bytes)
             )
 
-            logger.info("Uploaded ${bytes.size} bytes to key: $key")
-            getPublicUrl(key)
+            logger.info("Uploaded ${bytes.size} bytes for tenant $tenantId, key: $key")
+            getPublicUrl(tenantId, key)
         } catch (e: Exception) {
-            logger.error("Error uploading bytes to S3: $key", e)
-            throw e
+            logger.error("Error uploading bytes to S3 for tenant $tenantId: $key", e)
+            null
         }
     }
 
     /**
      * Upload bytes and return a pre-signed download URL
+     * @param tenantId The tenant ID
      * @param bytes The byte array to upload
      * @param key The S3 key (path) for the file
      * @param contentType The MIME type of the file
      * @param fileName Optional filename for Content-Disposition header
      * @param expirationSeconds URL expiration time in seconds
-     * @return A pre-signed download URL
+     * @return A pre-signed download URL, or null if upload failed
      */
     fun uploadBytesAndGetSignedUrl(
+        tenantId: Long,
         bytes: ByteArray,
         key: String,
         contentType: String,
         fileName: String? = null,
         expirationSeconds: Long = DEFAULT_EXPIRATION_SECONDS
-    ): String {
-        uploadBytes(bytes, key, contentType, fileName)
-        return generateDownloadUrl(key, expirationSeconds)
+    ): String? {
+        val uploaded = uploadBytes(tenantId, bytes, key, contentType, fileName)
+        if (uploaded == null) return null
+        return generateDownloadUrl(tenantId, key, expirationSeconds)
     }
 
     /**
      * Download file bytes from S3
+     * @param tenantId The tenant ID
      * @param key The S3 key of the file
      * @return The file contents as a byte array
      */
-    fun downloadBytes(key: String): ByteArray? {
+    fun downloadBytes(tenantId: Long, key: String): ByteArray? {
+        val clientWrapper = getS3Client(tenantId) ?: return null
         return try {
-            val response = s3Client.getObjectAsBytes(
+            val response = clientWrapper.client.getObjectAsBytes(
                 GetObjectRequest.builder()
-                    .bucket(bucket)
+                    .bucket(clientWrapper.bucket)
                     .key(key)
                     .build()
             )
             response.asByteArray()
         } catch (e: NoSuchKeyException) {
-            logger.warn("File not found: $key")
+            logger.warn("File not found for tenant $tenantId: $key")
             null
         } catch (e: Exception) {
-            logger.error("Error downloading file: $key", e)
+            logger.error("Error downloading file for tenant $tenantId: $key", e)
             null
         }
     }
@@ -332,50 +464,55 @@ class S3Service(
      * @param fileName The filename for the export
      * @param content The export file content as bytes
      * @param contentType The MIME type (default: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet)
-     * @return The public URL of the uploaded file
+     * @return The public URL of the uploaded file, or null if upload failed
      */
     fun uploadExport(
         tenantId: Long,
         fileName: String,
         content: ByteArray,
         contentType: String = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    ): String {
+    ): String? {
+        val clientWrapper = getS3Client(tenantId) ?: return null
         val timestamp = Instant.now().toEpochMilli()
         val key = "$EXPORTS_PREFIX/$tenantId/${timestamp}_$fileName"
 
         return try {
             val request = PutObjectRequest.builder()
-                .bucket(bucket)
+                .bucket(clientWrapper.bucket)
                 .key(key)
                 .contentType(contentType)
                 .contentLength(content.size.toLong())
                 .contentDisposition("attachment; filename=\"$fileName\"")
                 .build()
 
-            s3Client.putObject(request, RequestBody.fromBytes(content))
+            clientWrapper.client.putObject(request, RequestBody.fromBytes(content))
 
-            logger.info("Uploaded export: $key (${content.size} bytes)")
-            getPublicUrl(key)
+            logger.info("Uploaded export for tenant $tenantId: $key (${content.size} bytes)")
+            getPublicUrl(tenantId, key)
         } catch (e: Exception) {
-            logger.error("Error uploading export: $key", e)
-            throw e
+            logger.error("Error uploading export for tenant $tenantId: $key", e)
+            null
         }
     }
 
     /**
      * Generate a pre-signed URL for a given URL (extracts key from URL)
+     * @param tenantId The tenant ID
      * @param fileUrl The S3 URL or CDN URL
      * @param expirationSeconds How long the URL should be valid
      * @return A pre-signed download URL, or null if URL parsing fails
      */
-    fun generatePresignedUrl(fileUrl: String, expirationSeconds: Long = DEFAULT_EXPIRATION_SECONDS): String? {
+    fun generatePresignedUrl(tenantId: Long, fileUrl: String, expirationSeconds: Long = DEFAULT_EXPIRATION_SECONDS): String? {
+        val clientWrapper = getS3Client(tenantId) ?: return null
+        val presigner = getPresigner(tenantId) ?: return null
+
         return try {
             // Extract key from URL
-            val key = extractKeyFromUrl(fileUrl)
+            val key = extractKeyFromUrl(fileUrl, clientWrapper.cdnDomain, clientWrapper.bucket)
                 ?: return null
 
             val getRequest = GetObjectRequest.builder()
-                .bucket(bucket)
+                .bucket(clientWrapper.bucket)
                 .key(key)
                 .build()
 
@@ -386,7 +523,7 @@ class S3Service(
 
             presigner.presignGetObject(presignRequest).url().toString()
         } catch (e: Exception) {
-            logger.error("Error generating presigned URL for: $fileUrl", e)
+            logger.error("Error generating presigned URL for tenant $tenantId: $fileUrl", e)
             null
         }
     }
@@ -394,7 +531,7 @@ class S3Service(
     /**
      * Extract S3 key from a full URL
      */
-    private fun extractKeyFromUrl(url: String): String? {
+    private fun extractKeyFromUrl(url: String, cdnDomain: String?, bucket: String): String? {
         return try {
             when {
                 // CDN URL format: https://cdn.example.com/path/to/file
@@ -444,11 +581,12 @@ class S3Service(
     /**
      * Get the public URL for a key
      */
-    fun getPublicUrl(key: String): String {
-        return if (!cdnDomain.isNullOrBlank()) {
-            "https://$cdnDomain/$key"
+    fun getPublicUrl(tenantId: Long, key: String): String? {
+        val clientWrapper = getS3Client(tenantId) ?: return null
+        return if (!clientWrapper.cdnDomain.isNullOrBlank()) {
+            "https://${clientWrapper.cdnDomain}/$key"
         } else {
-            "https://$bucket.s3.$region.amazonaws.com/$key"
+            "https://${clientWrapper.bucket}.s3.${clientWrapper.region}.amazonaws.com/$key"
         }
     }
 
@@ -469,6 +607,15 @@ class S3Service(
         val md = MessageDigest.getInstance("MD5")
         val digest = md.digest(bytes)
         return digest.joinToString("") { "%02x".format(it) }
+    }
+
+    /**
+     * Clear cached clients for a tenant (useful when credentials are updated)
+     */
+    fun clearCache(tenantId: Long) {
+        clientCache.remove(tenantId)?.client?.close()
+        presignerCache.remove(tenantId)?.presigner?.close()
+        logger.info("Cleared S3 cache for tenant $tenantId")
     }
 }
 

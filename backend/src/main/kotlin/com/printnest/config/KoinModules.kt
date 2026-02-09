@@ -238,22 +238,8 @@ fun koinModules() = module {
     // Email Service (Brevo/Sendinblue)
     single { EmailService(get(), get(), get()) }
 
-    // AWS S3 Service
-    single {
-        val accessKeyId = System.getenv("AWS_ACCESS_KEY_ID") ?: ""
-        val secretAccessKey = System.getenv("AWS_SECRET_ACCESS_KEY") ?: ""
-        val region = System.getenv("AWS_REGION") ?: "us-east-1"
-        val bucket = System.getenv("AWS_S3_BUCKET") ?: "printnest-designs"
-        val cdnDomain = System.getenv("AWS_S3_CDN_DOMAIN")
-
-        S3Service(
-            accessKeyId = accessKeyId,
-            secretAccessKey = secretAccessKey,
-            region = region,
-            bucket = bucket,
-            cdnDomain = cdnDomain
-        )
-    }
+    // AWS S3 Service (uses per-tenant credentials from database)
+    single { S3Service() }
 
     // =====================================================
     // SERVICES

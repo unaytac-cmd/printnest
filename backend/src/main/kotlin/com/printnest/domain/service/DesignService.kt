@@ -70,12 +70,18 @@ class DesignService(
             }
 
             // Generate upload URL
-            val (uploadUrl, designKey) = s3Service.generateUploadUrl(
+            val uploadResult = s3Service.generateUploadUrl(
                 tenantId = tenantId,
                 userId = userId,
                 fileName = request.fileName,
                 contentType = request.mimeType
             )
+
+            if (uploadResult == null) {
+                return Result.failure(IllegalStateException("S3 not configured for this tenant"))
+            }
+
+            val (uploadUrl, designKey) = uploadResult
 
             // Generate thumbnail key for image types
             val thumbnailKey = if (designType == DesignType.DTF.code || designType == DesignType.UV.code) {
@@ -108,12 +114,12 @@ class DesignService(
     ): Result<Design> {
         try {
             // Verify file exists in S3
-            if (!s3Service.fileExists(request.designKey)) {
+            if (!s3Service.fileExists(tenantId, request.designKey)) {
                 return Result.failure(IllegalArgumentException("File not found in storage"))
             }
 
             // Get file metadata
-            val fileMetadata = s3Service.getFileMetadata(request.designKey)
+            val fileMetadata = s3Service.getFileMetadata(tenantId, request.designKey)
             val fileHash = fileMetadata?.eTag?.replace("\"", "") ?: ""
 
             // Check for duplicates
@@ -121,12 +127,13 @@ class DesignService(
             if (existingDesign != null) {
                 logger.info("Duplicate design found: ${existingDesign.id}")
                 // Delete the uploaded file since it's a duplicate
-                s3Service.deleteFile(request.designKey)
+                s3Service.deleteFile(tenantId, request.designKey)
                 return Result.success(existingDesign)
             }
 
             // Get public URLs
-            val designUrl = s3Service.getPublicUrl(request.designKey)
+            val designUrl = s3Service.getPublicUrl(tenantId, request.designKey)
+                ?: return Result.failure(IllegalStateException("Failed to get design URL"))
             val thumbnailUrl = request.metadata?.let {
                 // TODO: Generate thumbnail in background
                 null

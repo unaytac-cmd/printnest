@@ -75,8 +75,7 @@ class ExcelService(
             val fileUrl = s3Service.uploadExport(
                 tenantId = tenantId,
                 fileName = fileName,
-                content = excelBytes,
-                contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                content = excelBytes
             )
 
             // Create export history record
@@ -389,8 +388,7 @@ class ExcelService(
             val fileUrl = s3Service.uploadExport(
                 tenantId = tenantId,
                 fileName = fileName,
-                content = excelBytes,
-                contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                content = excelBytes
             )
 
             val exportId = exportRepository.createExportHistory(
@@ -525,8 +523,7 @@ class ExcelService(
             val fileUrl = s3Service.uploadExport(
                 tenantId = tenantId,
                 fileName = fileName,
-                content = excelBytes,
-                contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                content = excelBytes
             )
 
             val exportId = exportRepository.createExportHistory(
@@ -638,8 +635,7 @@ class ExcelService(
             val fileUrl = s3Service.uploadExport(
                 tenantId = tenantId,
                 fileName = fileName,
-                content = excelBytes,
-                contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                content = excelBytes
             )
 
             val exportId = exportRepository.createExportHistory(
@@ -737,8 +733,7 @@ class ExcelService(
             val fileUrl = s3Service.uploadExport(
                 tenantId = tenantId,
                 fileName = fileName,
-                content = excelBytes,
-                contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                content = excelBytes
             )
 
             val exportId = exportRepository.createExportHistory(
@@ -811,7 +806,7 @@ class ExcelService(
         }
 
         // Generate presigned URL valid for 1 hour
-        val presignedUrl = s3Service.generatePresignedUrl(export.fileUrl, 3600)
+        val presignedUrl = s3Service.generatePresignedUrl(tenantId, export.fileUrl, 3600)
 
         return ExportDownloadResponse(
             success = true,
