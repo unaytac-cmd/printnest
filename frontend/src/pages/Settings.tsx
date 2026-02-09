@@ -1,5 +1,5 @@
 import { Routes, Route, NavLink, Navigate } from 'react-router-dom';
-import { Store, CreditCard, Bell, User, Shield, Palette, Truck, Users, RefreshCw, CheckCircle, XCircle, Eye, EyeOff, Plus, Settings2 } from 'lucide-react';
+import { Store, CreditCard, Bell, User, Shield, Palette, Truck, Users, RefreshCw, CheckCircle, XCircle, Eye, EyeOff, Plus, Settings2, Cloud, Package } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import apiClient from '@/api/client';
@@ -7,8 +7,10 @@ import apiClient from '@/api/client';
 const settingsNav = [
   { title: 'Store', href: '/settings/store', icon: Store },
   { title: 'ShipStation', href: '/settings/shipstation', icon: Truck },
+  { title: 'Stripe', href: '/settings/stripe', icon: CreditCard },
+  { title: 'AWS', href: '/settings/aws', icon: Cloud },
+  { title: 'Shipping', href: '/settings/shipping', icon: Package },
   { title: 'Sub-dealers', href: '/settings/subdealers', icon: Users },
-  { title: 'Payments', href: '/settings/payments', icon: CreditCard },
   { title: 'Notifications', href: '/settings/notifications', icon: Bell },
   { title: 'Account', href: '/settings/account', icon: User },
   { title: 'Security', href: '/settings/security', icon: Shield },
@@ -176,53 +178,6 @@ function StoreSettings() {
   );
 }
 
-function PaymentsSettings() {
-  return (
-    <div className="bg-card border border-border rounded-xl p-6 space-y-6">
-      <h2 className="text-lg font-semibold">Payment Settings</h2>
-
-      <div className="space-y-4">
-        <div className="p-4 border border-border rounded-lg">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-8 bg-blue-600 rounded flex items-center justify-center text-white text-xs font-bold">
-                Stripe
-              </div>
-              <div>
-                <p className="font-medium">Stripe</p>
-                <p className="text-sm text-muted-foreground">
-                  Accept credit cards and more
-                </p>
-              </div>
-            </div>
-            <button className="px-4 py-2 border border-border rounded-lg hover:bg-muted transition-colors">
-              Connect
-            </button>
-          </div>
-        </div>
-
-        <div className="p-4 border border-border rounded-lg">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-8 bg-blue-500 rounded flex items-center justify-center text-white text-xs font-bold">
-                PayPal
-              </div>
-              <div>
-                <p className="font-medium">PayPal</p>
-                <p className="text-sm text-muted-foreground">
-                  Accept PayPal payments
-                </p>
-              </div>
-            </div>
-            <button className="px-4 py-2 border border-border rounded-lg hover:bg-muted transition-colors">
-              Connect
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function NotificationsSettings() {
   return (
@@ -520,6 +475,405 @@ function ShipStationSettings() {
 }
 
 // =====================================================
+// STRIPE SETTINGS
+// =====================================================
+
+function StripeSettings() {
+  const [publicKey, setPublicKey] = useState('');
+  const [secretKey, setSecretKey] = useState('');
+  const [showSecretKey, setShowSecretKey] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const response = await apiClient.get('/settings');
+        const settings = response.data;
+        if (settings.stripeSettings) {
+          setPublicKey(settings.stripeSettings.publicKey || '');
+          setSecretKey(settings.stripeSettings.secretKey || '');
+          setIsConnected(settings.stripeSettings.isConnected || (settings.stripeSettings.secretKey ? true : false));
+        }
+      } catch (err) {
+        console.error('Failed to fetch settings:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchSettings();
+  }, []);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await apiClient.put('/settings', {
+        stripeSettings: {
+          publicKey: publicKey || null,
+          secretKey: secretKey || null,
+          isConnected: !!(publicKey && secretKey),
+        },
+      });
+      setIsConnected(!!(publicKey && secretKey));
+    } catch (err) {
+      console.error('Failed to save settings:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="bg-card border border-border rounded-xl p-6 flex items-center justify-center h-64">
+        <RefreshCw className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">Stripe Settings</h2>
+          <p className="text-sm text-muted-foreground">
+            Configure your Stripe payment processing
+          </p>
+        </div>
+        {isConnected && (
+          <div className="flex items-center gap-2 text-green-600">
+            <CheckCircle className="w-5 h-5" />
+            <span className="text-sm font-medium">Connected</span>
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Publishable Key</label>
+          <input
+            type="text"
+            value={publicKey}
+            onChange={(e) => setPublicKey(e.target.value)}
+            placeholder="pk_live_..."
+            className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring font-mono text-sm"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Secret Key</label>
+          <div className="relative">
+            <input
+              type={showSecretKey ? 'text' : 'password'}
+              value={secretKey}
+              onChange={(e) => setSecretKey(e.target.value)}
+              placeholder="sk_live_..."
+              className="w-full px-3 py-2 pr-10 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring font-mono text-sm"
+            />
+            <button
+              type="button"
+              onClick={() => setShowSecretKey(!showSecretKey)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              {showSecretKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Find your API keys in your Stripe Dashboard under Developers &gt; API Keys
+        </p>
+      </div>
+
+      <div className="pt-4 border-t border-border">
+        <button
+          onClick={handleSave}
+          disabled={isSaving}
+          className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+        >
+          {isSaving ? 'Saving...' : 'Save Changes'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// =====================================================
+// AWS SETTINGS
+// =====================================================
+
+function AwsSettings() {
+  const [accessKeyId, setAccessKeyId] = useState('');
+  const [secretAccessKey, setSecretAccessKey] = useState('');
+  const [region, setRegion] = useState('us-east-1');
+  const [s3Bucket, setS3Bucket] = useState('');
+  const [showSecretKey, setShowSecretKey] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const response = await apiClient.get('/settings');
+        const settings = response.data;
+        if (settings.awsSettings) {
+          setAccessKeyId(settings.awsSettings.accessKeyId || '');
+          setSecretAccessKey(settings.awsSettings.secretAccessKey || '');
+          setRegion(settings.awsSettings.region || 'us-east-1');
+          setS3Bucket(settings.awsSettings.s3Bucket || '');
+        }
+      } catch (err) {
+        console.error('Failed to fetch settings:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchSettings();
+  }, []);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await apiClient.put('/settings', {
+        awsSettings: {
+          accessKeyId: accessKeyId || null,
+          secretAccessKey: secretAccessKey || null,
+          region: region || 'us-east-1',
+          s3Bucket: s3Bucket || null,
+        },
+      });
+    } catch (err) {
+      console.error('Failed to save settings:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="bg-card border border-border rounded-xl p-6 flex items-center justify-center h-64">
+        <RefreshCw className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-6 space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold">AWS Settings</h2>
+        <p className="text-sm text-muted-foreground">
+          Configure your AWS S3 storage for designs and gangsheets
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Access Key ID</label>
+          <input
+            type="text"
+            value={accessKeyId}
+            onChange={(e) => setAccessKeyId(e.target.value)}
+            placeholder="AKIA..."
+            className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring font-mono text-sm"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Secret Access Key</label>
+          <div className="relative">
+            <input
+              type={showSecretKey ? 'text' : 'password'}
+              value={secretAccessKey}
+              onChange={(e) => setSecretAccessKey(e.target.value)}
+              placeholder="Enter your secret access key"
+              className="w-full px-3 py-2 pr-10 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring font-mono text-sm"
+            />
+            <button
+              type="button"
+              onClick={() => setShowSecretKey(!showSecretKey)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              {showSecretKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Region</label>
+            <select
+              value={region}
+              onChange={(e) => setRegion(e.target.value)}
+              className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="us-east-1">US East (N. Virginia)</option>
+              <option value="us-east-2">US East (Ohio)</option>
+              <option value="us-west-1">US West (N. California)</option>
+              <option value="us-west-2">US West (Oregon)</option>
+              <option value="eu-west-1">EU (Ireland)</option>
+              <option value="eu-central-1">EU (Frankfurt)</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">S3 Bucket</label>
+            <input
+              type="text"
+              value={s3Bucket}
+              onChange={(e) => setS3Bucket(e.target.value)}
+              placeholder="my-bucket-name"
+              className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Create an IAM user with S3 access and generate access keys in AWS Console
+        </p>
+      </div>
+
+      <div className="pt-4 border-t border-border">
+        <button
+          onClick={handleSave}
+          disabled={isSaving}
+          className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+        >
+          {isSaving ? 'Saving...' : 'Save Changes'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// =====================================================
+// SHIPPING SETTINGS
+// =====================================================
+
+function ShippingSettingsPage() {
+  const [nestshipperApiKey, setNestshipperApiKey] = useState('');
+  const [easypostApiKey, setEasypostApiKey] = useState('');
+  const [showNestshipperKey, setShowNestshipperKey] = useState(false);
+  const [showEasypostKey, setShowEasypostKey] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const response = await apiClient.get('/settings');
+        const settings = response.data;
+        if (settings.shippingSettings) {
+          setNestshipperApiKey(settings.shippingSettings.nestshipperApiKey || '');
+          setEasypostApiKey(settings.shippingSettings.easypostApiKey || '');
+        }
+      } catch (err) {
+        console.error('Failed to fetch settings:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchSettings();
+  }, []);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await apiClient.put('/settings', {
+        shippingSettings: {
+          nestshipperApiKey: nestshipperApiKey || null,
+          easypostApiKey: easypostApiKey || null,
+        },
+      });
+    } catch (err) {
+      console.error('Failed to save settings:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="bg-card border border-border rounded-xl p-6 flex items-center justify-center h-64">
+        <RefreshCw className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-6 space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold">Shipping Settings</h2>
+        <p className="text-sm text-muted-foreground">
+          Configure your shipping label providers
+        </p>
+      </div>
+
+      <div className="space-y-6">
+        {/* NestShipper */}
+        <div className="space-y-4">
+          <h3 className="font-medium">NestShipper</h3>
+          <div>
+            <label className="block text-sm font-medium mb-1">API Key</label>
+            <div className="relative">
+              <input
+                type={showNestshipperKey ? 'text' : 'password'}
+                value={nestshipperApiKey}
+                onChange={(e) => setNestshipperApiKey(e.target.value)}
+                placeholder="Enter your NestShipper API Key"
+                className="w-full px-3 py-2 pr-10 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring font-mono text-sm"
+              />
+              <button
+                type="button"
+                onClick={() => setShowNestshipperKey(!showNestshipperKey)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                {showNestshipperKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-border" />
+
+        {/* EasyPost */}
+        <div className="space-y-4">
+          <h3 className="font-medium">EasyPost</h3>
+          <div>
+            <label className="block text-sm font-medium mb-1">API Key</label>
+            <div className="relative">
+              <input
+                type={showEasypostKey ? 'text' : 'password'}
+                value={easypostApiKey}
+                onChange={(e) => setEasypostApiKey(e.target.value)}
+                placeholder="Enter your EasyPost API Key"
+                className="w-full px-3 py-2 pr-10 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring font-mono text-sm"
+              />
+              <button
+                type="button"
+                onClick={() => setShowEasypostKey(!showEasypostKey)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                {showEasypostKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="pt-4 border-t border-border">
+        <button
+          onClick={handleSave}
+          disabled={isSaving}
+          className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+        >
+          {isSaving ? 'Saving...' : 'Save Changes'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// =====================================================
 // SUBDEALERS SETTINGS
 // =====================================================
 
@@ -783,8 +1137,10 @@ export default function Settings() {
         <Route index element={<Navigate to="/settings/store" replace />} />
         <Route path="store" element={<StoreSettings />} />
         <Route path="shipstation" element={<ShipStationSettings />} />
+        <Route path="stripe" element={<StripeSettings />} />
+        <Route path="aws" element={<AwsSettings />} />
+        <Route path="shipping" element={<ShippingSettingsPage />} />
         <Route path="subdealers" element={<SubdealersSettings />} />
-        <Route path="payments" element={<PaymentsSettings />} />
         <Route path="notifications" element={<NotificationsSettings />} />
         <Route path="account" element={<PlaceholderSettings title="Account" />} />
         <Route path="security" element={<PlaceholderSettings title="Security" />} />
