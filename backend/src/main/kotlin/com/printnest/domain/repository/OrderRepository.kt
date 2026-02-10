@@ -39,7 +39,10 @@ class OrderRepository : KoinComponent {
         }
 
         filters.storeId?.let { storeId ->
-            query = query.andWhere { Orders.storeId eq storeId }
+            // Check both storeId and shipstationStoreId for compatibility
+            query = query.andWhere {
+                (Orders.storeId eq storeId) or (Orders.shipstationStoreId eq storeId)
+            }
         }
 
         filters.shipstationStoreId?.let { ssStoreId ->
