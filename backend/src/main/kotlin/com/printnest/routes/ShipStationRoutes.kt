@@ -239,7 +239,8 @@ fun Route.shipStationRoutes() {
                 apiSecret = apiSecret,
                 storeId = request.storeId,
                 modifyDateStart = request.modifyDateStart,
-                modifyDateEnd = request.modifyDateEnd
+                modifyDateEnd = request.modifyDateEnd,
+                orderStatus = request.orderStatus
             )
 
             result.fold(
@@ -482,7 +483,8 @@ data class ShipStationSyncOrdersRequest(
     val apiSecret: String? = null,
     val storeId: Long? = null,
     val modifyDateStart: String? = null,
-    val modifyDateEnd: String? = null
+    val modifyDateEnd: String? = null,
+    val orderStatus: String = "awaiting_shipment"
 )
 
 @Serializable

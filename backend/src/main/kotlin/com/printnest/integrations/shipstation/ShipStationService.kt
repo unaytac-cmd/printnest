@@ -78,6 +78,7 @@ class ShipStationService(
 
     /**
      * Sync orders from ShipStation for a specific store
+     * Only syncs orders with "awaiting_shipment" status by default
      */
     suspend fun syncOrders(
         tenantId: Long,
@@ -86,16 +87,18 @@ class ShipStationService(
         apiSecret: String,
         storeId: Long? = null,
         modifyDateStart: String? = null,
-        modifyDateEnd: String? = null
+        modifyDateEnd: String? = null,
+        orderStatus: String = "awaiting_shipment"
     ): Result<SyncOrdersResult> {
-        logger.info("Syncing ShipStation orders for tenant $tenantId, store $storeId")
+        logger.info("Syncing ShipStation orders for tenant $tenantId, store $storeId, status: $orderStatus")
 
         val ordersResult = client.getOrders(
             apiKey = apiKey,
             apiSecret = apiSecret,
             storeId = storeId,
             modifyDateStart = modifyDateStart,
-            modifyDateEnd = modifyDateEnd
+            modifyDateEnd = modifyDateEnd,
+            orderStatus = orderStatus
         )
 
         return ordersResult.fold(
