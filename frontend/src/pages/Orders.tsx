@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Routes, Route, Link, useLocation } from 'react-router-dom';
-import { Search, Package, CheckCircle, Clock, XCircle, Loader2, Truck, AlertCircle, Edit2, RefreshCw, Store, ClipboardList, PackageCheck } from 'lucide-react';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { Search, Package, CheckCircle, Clock, XCircle, Loader2, Truck, AlertCircle, Edit2, RefreshCw, Store } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useOrders } from '@/hooks/useOrders';
 import { useIsSubdealer, useAssignedStoreIds } from '@/stores/authStore';
-import { OrderStatusCodes, getOrderStatusLabel, getOrderStatusColor } from '@/types';
+import { OrderStatusCodes, getOrderStatusLabel, getOrderStatusColor, ApiOrder } from '@/types';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import apiClient from '@/api/client';
-import NewOrder from './orders/NewOrder';
+import { Link } from 'react-router-dom';
 
 interface StoreInfo {
   id: number;
@@ -18,7 +18,7 @@ interface StoreInfo {
 }
 
 // Shared order card component
-function OrderCard({ order }: { order: any }) {
+function OrderCard({ order }: { order: ApiOrder }) {
   const orderNumber = order.externalOrderId || order.intOrderId || `#${order.id}`;
   const statusColor = getOrderStatusColor(order.orderStatus);
   const statusLabel = getOrderStatusLabel(order.orderStatus);
@@ -126,8 +126,8 @@ function StoreFilter({
   );
 }
 
-// New Orders tab - awaiting shipment orders
-function NewOrdersTab() {
+// New Orders page - awaiting shipment orders
+function NewOrdersPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [storeFilter, setStoreFilter] = useState<number | 'all'>('all');
   const [page, setPage] = useState(1);
@@ -210,7 +210,23 @@ function NewOrdersTab() {
 
   return (
     <div className="space-y-6">
-      {/* Actions */}
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">New Orders</h1>
+          <p className="text-muted-foreground">Orders awaiting processing</p>
+        </div>
+        <button
+          onClick={handleSyncOrders}
+          disabled={isSyncing}
+          className="inline-flex items-center gap-2 px-4 py-2 border border-border rounded-lg hover:bg-muted transition-colors disabled:opacity-50"
+        >
+          <RefreshCw className={cn("w-4 h-4", isSyncing && "animate-spin")} />
+          {isSyncing ? 'Syncing...' : 'Sync Orders'}
+        </button>
+      </div>
+
+      {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4 justify-between">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -222,22 +238,12 @@ function NewOrdersTab() {
             className="w-full pl-10 pr-4 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
-        <div className="flex items-center gap-2">
-          <StoreFilter
-            stores={stores}
-            storeFilter={storeFilter}
-            setStoreFilter={setStoreFilter}
-            isSubdealer={isSubdealer}
-          />
-          <button
-            onClick={handleSyncOrders}
-            disabled={isSyncing}
-            className="inline-flex items-center gap-2 px-4 py-2 border border-border rounded-lg hover:bg-muted transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={cn("w-4 h-4", isSyncing && "animate-spin")} />
-            {isSyncing ? 'Syncing...' : 'Sync'}
-          </button>
-        </div>
+        <StoreFilter
+          stores={stores}
+          storeFilter={storeFilter}
+          setStoreFilter={(v) => { setStoreFilter(v); setPage(1); }}
+          isSubdealer={isSubdealer}
+        />
       </div>
 
       {/* Orders List */}
@@ -283,8 +289,8 @@ function NewOrdersTab() {
   );
 }
 
-// Order List tab - completed/shipped orders
-function OrderListTab() {
+// Order List page - completed/shipped orders
+function OrderListPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [storeFilter, setStoreFilter] = useState<number | 'all'>('all');
   const [page, setPage] = useState(1);
@@ -344,13 +350,19 @@ function OrderListTab() {
 
   return (
     <div className="space-y-6">
-      {/* Actions */}
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold">Order List</h1>
+        <p className="text-muted-foreground">Completed and shipped orders</p>
+      </div>
+
+      {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4 justify-between">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
             type="text"
-            placeholder="Search completed orders..."
+            placeholder="Search orders..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
@@ -359,7 +371,7 @@ function OrderListTab() {
         <StoreFilter
           stores={stores}
           storeFilter={storeFilter}
-          setStoreFilter={setStoreFilter}
+          setStoreFilter={(v) => { setStoreFilter(v); setPage(1); }}
           isSubdealer={isSubdealer}
         />
       </div>
@@ -372,7 +384,7 @@ function OrderListTab() {
 
         {orders.length === 0 && (
           <div className="text-center py-12">
-            <PackageCheck className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+            <CheckCircle className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
             <p className="text-muted-foreground">No completed orders yet</p>
             <p className="text-sm text-muted-foreground mt-2">
               Shipped and completed orders will appear here
@@ -407,62 +419,13 @@ function OrderListTab() {
   );
 }
 
-// Main Orders Layout with Tabs
-function OrdersLayout() {
-  const location = useLocation();
-  const currentPath = location.pathname;
-
-  const tabs = [
-    { path: '/orders', label: 'New Orders', icon: ClipboardList },
-    { path: '/orders/list', label: 'Order List', icon: PackageCheck },
-  ];
-
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold">Orders</h1>
-        <p className="text-muted-foreground">Manage and track customer orders</p>
-      </div>
-
-      {/* Tabs */}
-      <div className="border-b border-border">
-        <nav className="flex gap-4">
-          {tabs.map((tab) => {
-            const isActive = currentPath === tab.path ||
-              (tab.path === '/orders' && currentPath === '/orders');
-            const Icon = tab.icon;
-
-            return (
-              <Link
-                key={tab.path}
-                to={tab.path}
-                className={cn(
-                  'flex items-center gap-2 px-4 py-3 border-b-2 -mb-px transition-colors',
-                  isActive
-                    ? 'border-primary text-primary font-medium'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                )}
-              >
-                <Icon className="w-4 h-4" />
-                {tab.label}
-              </Link>
-            );
-          })}
-        </nav>
-      </div>
-
-      {/* Tab Content */}
-      <Routes>
-        <Route index element={<NewOrdersTab />} />
-        <Route path="list" element={<OrderListTab />} />
-        <Route path="new" element={<NewOrder />} />
-        <Route path=":id" element={<NewOrder />} />
-      </Routes>
-    </div>
-  );
-}
-
 export default function Orders() {
-  return <OrdersLayout />;
+  return (
+    <Routes>
+      <Route index element={<Navigate to="/orders/new-orders" replace />} />
+      <Route path="new-orders" element={<NewOrdersPage />} />
+      <Route path="list" element={<OrderListPage />} />
+      <Route path=":id" element={<NewOrdersPage />} />
+    </Routes>
+  );
 }
