@@ -15,8 +15,6 @@ import {
   LogOut,
   Layers,
   Link2,
-  ClipboardList,
-  PackageCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTenantBranding } from '@/hooks/useTenant';
