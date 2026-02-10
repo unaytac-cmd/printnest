@@ -58,12 +58,14 @@ ssh root@159.203.165.38 "docker exec printnest-db psql -U printnest -d printnest
 # Git uzerinden deploy (onerilen)
 ssh root@159.203.165.38 "cd /opt/printnest && git pull && docker compose -f docker-compose.simple.yml up -d --build"
 
-# Tek dosya guncelleme
-scp /Users/una/printnest/frontend/src/pages/Dashboard.tsx root@159.203.165.38:/opt/printnest/frontend/src/pages/
-ssh root@159.203.165.38 "cd /opt/printnest && docker compose -f docker-compose.simple.yml build frontend && docker compose -f docker-compose.simple.yml up -d frontend --force-recreate"
+# Sadece frontend deploy
+ssh root@159.203.165.38 "cd /opt/printnest && git pull && docker compose -f docker-compose.simple.yml up -d --build frontend"
 
-# Backend rebuild (~5-7 dk surer)
-ssh root@159.203.165.38 "cd /opt/printnest && docker compose -f docker-compose.simple.yml build backend --no-cache && docker compose -f docker-compose.simple.yml up -d backend --force-recreate"
+# Sadece backend deploy (~5-7 dk surer)
+ssh root@159.203.165.38 "cd /opt/printnest && git pull && docker compose -f docker-compose.simple.yml up -d --build backend"
+
+# Commit, push ve deploy (tek komut)
+git add -A && git commit -m "mesaj" && git push origin main && ssh root@159.203.165.38 "cd /opt/printnest && git pull && docker compose -f docker-compose.simple.yml up -d --build"
 ```
 
 ---
@@ -89,25 +91,21 @@ Super Admin (Platform sahibi)
 | **Super Admin** | Platform yonetimi, tum tenant'lara erisim |
 | **Tenant Owner** | Tenant ayarlari, kullanici yonetimi |
 | **Tenant Admin** | Siparis, urun, tasarim yonetimi |
-| **Sub-dealer** | Sadece kendi siparisleri |
+| **Sub-dealer** | Sadece kendi siparisleri (atanan store'lar) |
 | **Employee** | Sinirli erisim |
-
-### URL Yapisi (Domain alindiktan sonra)
-| URL | Amac |
-|-----|------|
-| `admin.printnest.com` | Super Admin Panel |
-| `{tenant}.printnest.com` | Tenant Dashboard |
-| `api.printnest.com` | API Gateway |
 
 ---
 
-## Siparis Akisi
+## Siparis Yonetimi
 
-**ONEMLI: Siparisler sadece ShipStation'dan cekilecek!**
+### Siparis Akisi
+```
+ShipStation API → PrintNest (Sync) → Gangsheet → Baski → Kargo
+```
 
-```
-ShipStation API → PrintNest → Gangsheet → Baski → Kargo
-```
+**ONEMLI:**
+- Siparisler ShipStation'dan "awaiting_shipment" statusu ile cekilir
+- Sadece gonderime hazir siparisler sync edilir
 
 ### Order Status Enum
 ```kotlin
@@ -127,24 +125,68 @@ enum class OrderStatus(val code: Int) {
 }
 ```
 
+### Orders Sayfa Yapisi
+
+Sidebar'da Orders menu'su altinda:
+- **New Orders** (`/orders/new-orders`) - Bekleyen siparisler (NEW, PENDING, URGENT, IN_PRODUCTION, PAYMENT_PENDING)
+- **Order List** (`/orders/list`) - Tamamlanan siparisler (SHIPPED, COMPLETED)
+
+Her iki sayfada:
+- Store bazli filtreleme (dropdown)
+- Arama fonksiyonu
+- Pagination
+- New Orders'da "Sync Orders" butonu
+
+### Store Filtreleme
+- Frontend: `/shipstation/stores` endpoint'inden store listesi cekilir
+- Backend: `storeId` parametresi hem `Orders.storeId` hem de `Orders.shipstationStoreId` kolonlarini kontrol eder
+- Subdealerlar otomatik olarak atandiklari store'a filtrelenir
+
 ---
 
-## Kullanici Kayit Akisi
+## ShipStation Entegrasyonu
 
-### 1. Register (`/register`)
-2 adimli kayit formu:
-- Step 1: Ad, Soyad, Email, Sifre
-- Step 2: Store Name, Store Slug
+### Baglanti
+1. Settings > ShipStation'da API Key ve Secret girilir
+2. `/shipstation/connect` endpoint'i credentials'i validate eder
+3. Basarili ise `tenants.settings` JSONB'ye kaydedilir
 
-### 2. Onboarding Wizard (`/onboarding`)
-7 adimli kurulum:
-1. **Welcome** - Hos geldiniz
-2. **Store Setup** - Isletme adi, subdomain, custom domain
-3. **ShipStation** - API Key, API Secret
-4. **Payment** - Stripe Public Key, Secret Key
-5. **Shipping** - NestShipper API Key, EasyPost API Key
-6. **Gangsheet Settings** - Width, Height, DPI, Spacing
-7. **Complete** - Kurulum tamamlandi
+### Store Sync
+- `/shipstation/sync-stores` - ShipStation'daki store'lari `shipstation_stores` tablosuna kaydeder
+- Her store'un `shipstationStoreId` (ShipStation'daki ID) ve `id` (bizim ID) degerleri var
+
+### Order Sync
+- `/shipstation/sync-orders` - Sadece "awaiting_shipment" siparisleri cekilir
+- Siparisler `orders` tablosuna `shipstationStoreId` ile kaydedilir
+- Order items `order_products` tablosuna kaydedilir
+
+### Onemli Dosyalar
+```
+backend/src/main/kotlin/com/printnest/integrations/shipstation/
+├── ShipStationClient.kt    # HTTP client, API cagrilari
+├── ShipStationService.kt   # Business logic, order sync
+├── ShipStationModels.kt    # Request/Response modelleri
+```
+
+### Serialization Notu
+ShipStation order sync'de `buildJsonObject` kullanilmali, `mapOf` degil. Cunku:
+- `mapOf` karisik tipler icerdiginde (String, Boolean, Double) `Map<String, Any>` olusturur
+- kotlinx.serialization `Any` tipini serialize edemez
+- `buildJsonObject` ile her alan tipine gore `put()` kullanilmali
+
+```kotlin
+// YANLIS - Serialization hatasi verir
+val json = json.encodeToString(mapOf(
+    "name" to "value",
+    "gift" to true  // Boolean - Map<String, Any> olusturur
+))
+
+// DOGRU
+val json = buildJsonObject {
+    put("name", "value")
+    put("gift", true)
+}.toString()
+```
 
 ---
 
@@ -153,146 +195,144 @@ enum class OrderStatus(val code: Int) {
 ### Onemli Tablolar
 | Tablo | Aciklama |
 |-------|----------|
-| `tenants` | Isletmeler |
+| `tenants` | Isletmeler (settings JSONB kolonu) |
 | `users` | Kullanicilar |
 | `orders` | Siparisler |
 | `order_products` | Siparis urunleri |
+| `shipstation_stores` | ShipStation store'lari |
 | `products` | Urunler |
 | `variants` | Urun varyantlari |
 | `gangsheets` | Gangsheet'ler |
 | `designs` | Tasarimlar |
-| `map_values` | Variant eslestirmeleri |
-| `map_listings` | Tasarim eslestirmeleri |
 
-### Migration Dosyalari
-Konum: `backend/src/main/resources/db/migration/`
-- V1__initial_schema.sql
-- V2__producer_subdealer.sql
-- V3__products_categories_mapping.sql
-- V4__shipping_price_profiles.sql
-- V5__order_processing.sql
-- V6__settings_features.sql
-- V7__ticket_system.sql
-- V8__scheduler_tables.sql
-- V9__email_system.sql
-- V10__monitor_tables.sql
-- V11__digitizing_tables.sql
-- V12__batch_tables.sql
-- V13__variant_flags.sql
+### Settings JSONB Yapisi (tenants.settings)
+```json
+{
+  "shipstationSettings": {
+    "apiKey": "xxx",
+    "apiSecret": "xxx"
+  },
+  "stripeSettings": {
+    "publicKey": "pk_xxx",
+    "secretKey": "sk_xxx"
+  },
+  "awsSettings": {
+    "accessKeyId": "xxx",
+    "secretAccessKey": "xxx",
+    "region": "us-east-1",
+    "bucket": "xxx"
+  },
+  "shippingSettings": {
+    "easyPostApiKey": "xxx",
+    "nestShipperApiKey": "xxx"
+  },
+  "gangsheetSettings": {
+    "width": 22,
+    "height": 60,
+    "dpi": 300,
+    "spacing": 0.25
+  }
+}
+```
 
-### Migration Calistirma (Manuel)
+### Migration Calistirma
 ```bash
-# Tum migration'lari birlestir
 cat backend/src/main/resources/db/migration/V*.sql > /tmp/all_migrations.sql
-
-# Sunucuya kopyala ve calistir
 scp /tmp/all_migrations.sql root@159.203.165.38:/tmp/
 ssh root@159.203.165.38 "docker cp /tmp/all_migrations.sql printnest-db:/tmp/ && docker exec printnest-db psql -U printnest -d printnest -f /tmp/all_migrations.sql"
+```
+
+### Veritabani Temizleme
+```bash
+# Shipped order'lari sil
+ssh root@159.203.165.38 "docker exec printnest-db psql -U printnest -d printnest -c \"DELETE FROM order_products WHERE order_id IN (SELECT id FROM orders WHERE order_status = 20); DELETE FROM orders WHERE order_status = 20;\""
+
+# Tum order'lari sil
+ssh root@159.203.165.38 "docker exec printnest-db psql -U printnest -d printnest -c \"DELETE FROM order_products; DELETE FROM orders;\""
 ```
 
 ---
 
 ## Cozulen Sorunlar
 
-### 1. CORS Hatasi (403)
-**Sorun:** Frontend backend'e istek atamiyor
-**Cozum:** `backend/src/main/kotlin/com/printnest/plugins/CORS.kt`'de SERVER_IP ve nip.io eklendi
+### 1. Settings Double-Encoding
+**Sorun:** Tenant settings JSONB'de cift escape (`\"` yerine `\\\"`) ile kaydediliyordu
+**Cozum:** `Tables.kt`'de `jsonb<String>` yerine `text()` kullanildi
 ```kotlin
-System.getenv("SERVER_IP")?.let { ip ->
-    allowHost(ip, schemes = listOf("http", "https"))
-    allowHost("$ip.nip.io", schemes = listOf("http", "https"))
-    allowHost("*.$ip.nip.io", schemes = listOf("http", "https"))
+// Onceki (hatali)
+val settings = jsonb<String>("settings", jsonSerializer).default("{}")
+// Sonraki (dogru)
+val settings = text("settings").default("{}")
+```
+
+### 2. Order Serialization Hatasi
+**Sorun:** "Serializer for class 'Any' is not found" hatasi
+**Cozum:** `ShipStationService.kt`'de `mapOf` yerine `buildJsonObject` kullanildi
+
+### 3. Store Filter Calismiyordu
+**Sorun:** ShipStation siparisleri `shipstationStoreId` ile kaydediliyor ama filtre `storeId` kolonunu kontrol ediyordu
+**Cozum:** `OrderRepository.kt`'de her iki kolon da kontrol ediliyor:
+```kotlin
+filters.storeId?.let { storeId ->
+    query = query.andWhere {
+        (Orders.storeId eq storeId) or (Orders.shipstationStoreId eq storeId)
+    }
 }
 ```
 
-### 2. Store Not Found
-**Sorun:** IP adresiyle erisimde tenant bulunamiyor
-**Cozum:** `frontend/src/hooks/useTenant.ts`'de IP adresi development mode olarak tanimlandi
-```typescript
-const isIPAddress = /^(\d{1,3}\.){3}\d{1,3}(\.nip\.io)?$/.test(window.location.hostname);
-const isDevelopment = hostname === 'localhost' || hostname === '127.0.0.1' || isIPAddress;
-```
+### 4. Orders Sayfasi Crash
+**Sorun:** "Cannot read properties of undefined (reading 'orders')" hatasi
+**Cozum:** `useOrders.ts`'de response handling duzeltildi - `api.get` zaten `res.data` doner
 
-### 3. Veritabani Tablolari Yok
-**Sorun:** Migration'lar otomatik calismiyor
-**Cozum:** Migration'lar manuel olarak calistirildi (yukaridaki komutlarla)
-
-### 4. Backend Build OOM (Out of Memory)
-**Sorun:** 2GB RAM'de Kotlin/Gradle build basarisiz
-**Cozum:** DigitalOcean Droplet 4GB'a yukseltildi
-
-### 5. Database Port Hatasi
-**Sorun:** Backend localhost:5433'e baglanmaya calisiyor
-**Cozum:** `docker-compose.simple.yml`'de DATABASE_URL duzeltildi
-```yaml
-environment:
-  - DATABASE_URL=jdbc:postgresql://postgres:5432/printnest
-```
+### 5. CORS Hatasi (403)
+**Sorun:** Frontend backend'e istek atamiyor
+**Cozum:** `CORS.kt`'de SERVER_IP ve nip.io eklendi
 
 ### 6. Tenant Detection After Login
-**Sorun:** Login sonrasi tenant store'dan okunmuyor, URL'den bulunmaya calisiliyor
+**Sorun:** Login sonrasi tenant store'dan okunmuyor
 **Cozum:** `useTenant.ts`'de hasTenantInStore kontrolu eklendi
-```typescript
-const hasTenantInStore = !!tenant && !!tenant.id;
-// Query disabled if tenant already in store
-enabled: !hasTenantInStore && (isDevelopment || !!slug),
+
+---
+
+## Frontend Yapisi
+
+### Sidebar Navigasyonu
+```
+Overview
+├── Dashboard
+├── Analytics (sadece producer)
+
+Orders
+└── Orders (expandable)
+    ├── New Orders
+    └── Order List
+
+Print on Demand (sadece producer)
+├── Design Studio
+├── Gangsheet
+├── Mapping
+├── Catalog
+└── Fulfillment
+
+Settings (sadece producer)
+└── Settings
 ```
 
----
-
-## Bilinen Sorunlar / TODO
-
-### Acil (Arastiriliyor)
-- [ ] **White blank page sorunu**: Login/register sonrasi `/welcome` sayfasi bos gorunuyor
-  - Olasiliklar: JS error, Lazy loading sorunu, GuestRoute redirect loop
-  - Cozum: Browser console kontrolu gerekli
-- [ ] Onboarding flow test edilmeli
-
-### Dashboard
-- [ ] Dashboard API endpoint'i (`/api/v1/dashboard`) backend'de yok
-- [ ] Gercek data icin API baglantisi yapilmali
-
-### Deployment
-- [ ] Domain alinmali (su an nip.io ile calisiyor)
-- [ ] SSL/HTTPS kurulmali (Let's Encrypt)
-- [ ] CI/CD pipeline test edilmeli
-
-### Entegrasyonlar
-- [ ] ShipStation entegrasyonu test edilmeli
-- [ ] Stripe entegrasyonu test edilmeli
-- [ ] S3 bucket olusturulmali
-
----
-
-## Son Yapilan Isler (Oturum Gecmisi)
-
-### Session: 2024-XX-XX
-
-1. **GitHub Repository Olusturuldu**
-   - https://github.com/unaytac-cmd/printnest (public)
-   - `gh auth refresh -h github.com -s workflow` ile workflow izni eklendi
-
-2. **DigitalOcean Deployment**
-   - 4GB RAM droplet olusturuldu (2GB yetmedi - OOM)
-   - Docker Compose ile coklu servis (backend, frontend, postgres, redis)
-   - nip.io ile domainsiz calistirildi
-
-3. **CORS Duzeltmeleri**
-   - IP adresi ve nip.io domain'leri CORS whitelist'e eklendi
-
-4. **Tenant Detection Duzeltmeleri**
-   - IP adresi development mode olarak tanimlandi
-   - Login sonrasi tenant store'dan okuma eklendi
-
-5. **Dashboard Guncellendi**
-   - Mock data kaldirildi
-   - `useDashboard` hook'u ile API baglantisi eklendi
-   - Empty state "Connect ShipStation" butonuyla eklendi
-
-6. **White Blank Page Arastirmasi (Devam Ediyor)**
-   - GuestRoute redirect logic kontrolu yapildi
-   - TenantWrapper basitlestirildi
-   - Sorun hala devam ediyor - browser console kontrolu gerekli
+### Onemli Dosyalar
+```
+frontend/src/
+├── pages/
+│   ├── Orders.tsx           # Order sayfasi (New Orders + Order List)
+│   ├── Dashboard.tsx        # Ana dashboard
+│   └── Settings.tsx         # Ayarlar sayfasi
+├── components/
+│   └── layout/
+│       └── Sidebar.tsx      # Sidebar navigasyonu
+├── hooks/
+│   └── useOrders.ts         # Order hook'u
+└── stores/
+    └── authStore.ts         # Auth state (isSubdealer, assignedStoreIds)
+```
 
 ---
 
@@ -324,23 +364,6 @@ VITE_APP_ENV=production
 
 ---
 
-## Gangsheet Ayarlari
-
-Her tenant icin ozellestirilmis gangsheet konfigurasyonu:
-
-```typescript
-interface GangsheetSettings {
-  width: number;        // inch (varsayilan: 22)
-  height: number;       // inch (varsayilan: 60)
-  dpi: number;          // varsayilan: 300
-  spacing: number;      // inch (varsayilan: 0.25)
-  backgroundColor: string;  // hex color
-  autoArrange: boolean;     // otomatik yerlestirme
-}
-```
-
----
-
 ## Local Development
 
 ### Backend Calistirma
@@ -358,39 +381,11 @@ npm run dev
 # http://localhost:3000
 ```
 
-### Docker Compose (Local)
-```bash
-docker compose up -d
-```
-
----
-
-## API Entegrasyonlari
-
-### ShipStation
-- Siparis cekme
-- Kargo durumu guncelleme
-- Tracking bilgisi gonderme
-
-### Stripe
-- Odeme isleme
-- Abonelik yonetimi
-- Faturalama
-
-### NestShipper / EasyPost
-- Kargo etiketi olusturma
-- Fiyat hesaplama
-
-### AWS S3
-- Tasarim dosyalari
-- Gangsheet PNG'leri
-
 ---
 
 ## Referans Proje
 
 **TeeDropV2** - Python/Flask ile yazilmis orjinal proje.
-
 ```
 /Users/una/teedropV2/
 ```
@@ -402,18 +397,15 @@ docker compose up -d
 | `models/enums.py` | Status codes, enums |
 | `blueprints/admin/order_helpers.py` | Price calculation logic |
 | `blueprints/admin/gangsheet.py` | Gangsheet generation |
-| `walmart_integration/` | Marketplace auth patterns |
-
-Orjinal kodu okumak icin: "teedropV2'deki X dosyasini oku" de.
 
 ---
 
 ## Notlar
 
 - Her tabloda `tenant_id` ile row-level security
-- JSONB kolonlari mevcut (order_info, price_detail, settings)
+- JSONB kolonlari: `orders.order_info`, `orders.order_detail`, `tenants.settings`
 - Redis ile token caching
-- S3 ile dosya depolama (henuz aktif degil)
 - nip.io: Domain olmadan IP ile calismak icin kullaniliyor
 - Backend build suresi: ~5-7 dakika (4GB RAM ile)
 - Frontend build suresi: ~40 saniye
+- ShipStation sync sadece "awaiting_shipment" siparisleri cekilir
