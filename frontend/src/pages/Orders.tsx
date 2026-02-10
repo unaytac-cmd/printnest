@@ -1,17 +1,26 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Routes, Route, Link } from 'react-router-dom';
-import { Search, Package, CheckCircle, Clock, XCircle, Loader2, Plus, Truck, AlertCircle, Edit2, RefreshCw } from 'lucide-react';
+import { Search, Package, CheckCircle, Clock, XCircle, Loader2, Plus, Truck, AlertCircle, Edit2, RefreshCw, Store } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useOrders } from '@/hooks/useOrders';
 import { useIsSubdealer, useAssignedStoreIds } from '@/stores/authStore';
 import { OrderStatusCodes, getOrderStatusLabel, getOrderStatusColor } from '@/types';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import apiClient from '@/api/client';
 import NewOrder from './orders/NewOrder';
+
+interface StoreInfo {
+  id: number;
+  shipstationStoreId: number;
+  storeName: string;
+  marketplaceName?: string;
+  isActive: boolean;
+}
 
 function OrdersList() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<number | 'all'>('all');
+  const [storeFilter, setStoreFilter] = useState<number | 'all'>('all');
   const [page, setPage] = useState(1);
   const [isSyncing, setIsSyncing] = useState(false);
   const pageSize = 20;
@@ -20,9 +29,24 @@ function OrdersList() {
   const isSubdealer = useIsSubdealer();
   const assignedStoreIds = useAssignedStoreIds();
 
-  // For subdealers, filter by their first assigned store (backend should handle multiple)
-  // TODO: Backend should filter by user's assigned stores automatically
-  const storeFilter = isSubdealer && assignedStoreIds.length > 0 ? assignedStoreIds[0] : undefined;
+  // Fetch stores for filter dropdown
+  const { data: stores = [] } = useQuery({
+    queryKey: ['shipstation-stores'],
+    queryFn: async () => {
+      const response = await apiClient.get('/shipstation/stores');
+      return response.data as StoreInfo[];
+    },
+  });
+
+  // For subdealers, auto-select their first assigned store
+  useEffect(() => {
+    if (isSubdealer && assignedStoreIds.length > 0 && storeFilter === 'all') {
+      setStoreFilter(assignedStoreIds[0]);
+    }
+  }, [isSubdealer, assignedStoreIds, storeFilter]);
+
+  // Get effective store filter
+  const effectiveStoreFilter = storeFilter === 'all' ? undefined : storeFilter;
 
   const handleSyncOrders = async () => {
     setIsSyncing(true);
@@ -50,7 +74,7 @@ function OrdersList() {
     pageSize,
     search: searchQuery || undefined,
     status: statusFilter === 'all' ? undefined : statusFilter,
-    storeId: storeFilter,
+    storeId: effectiveStoreFilter,
   });
 
   const orders = data?.data || [];
@@ -138,25 +162,50 @@ function OrdersList() {
         </div>
       </div>
 
-      {/* Status Tabs */}
-      <div className="flex gap-2 overflow-x-auto pb-2">
-        {statusOptions.map((option) => (
-          <button
-            key={option.value}
-            onClick={() => {
-              setStatusFilter(option.value);
-              setPage(1);
-            }}
-            className={cn(
-              'px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors',
-              statusFilter === option.value
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-muted hover:bg-muted/80'
-            )}
-          >
-            {option.label}
-          </button>
-        ))}
+      {/* Filters Row */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        {/* Status Tabs */}
+        <div className="flex gap-2 overflow-x-auto pb-2 flex-1">
+          {statusOptions.map((option) => (
+            <button
+              key={option.value}
+              onClick={() => {
+                setStatusFilter(option.value);
+                setPage(1);
+              }}
+              className={cn(
+                'px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors',
+                statusFilter === option.value
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted hover:bg-muted/80'
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Store Filter */}
+        {!isSubdealer && stores.length > 0 && (
+          <div className="flex items-center gap-2">
+            <Store className="w-4 h-4 text-muted-foreground" />
+            <select
+              value={storeFilter}
+              onChange={(e) => {
+                setStoreFilter(e.target.value === 'all' ? 'all' : Number(e.target.value));
+                setPage(1);
+              }}
+              className="px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="all">All Stores</option>
+              {stores.map((store) => (
+                <option key={store.id} value={store.id}>
+                  {store.storeName}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Search */}
